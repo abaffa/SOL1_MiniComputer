@@ -1,1 +1,0 @@
-SOL1_MiniComputer
