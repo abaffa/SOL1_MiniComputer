@@ -1,0 +1,4 @@
+boot_origin      .EQU  $8204
+bios_uart        .EQU  $0002
+bios_ide         .EQU  $0003
+noname._IDE_BUFFER .EQU  $8000

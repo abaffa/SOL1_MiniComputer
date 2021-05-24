@@ -1,0 +1,18 @@
+                             call : call a memory location\n\r
+                              ld : load data into memory\n\r
+                              lc : load and call\n\r
+                             dmp : dump a 512-byte block\n\r
+                             pwd : print working directory\n\r
+                              ls : list directory contents\n\r
+                  cd [directory] : change the current working directory\n\r
+                  cat [filename] : print text-file\n\r
+                   rm [filename] : remove file\n\r
+ mv/rn [filename] [new filename] : rename file\n\r
+               rmdir [directory] : remove directory\n\r
+                                   warning: the directory must be empty.\n\r
+                mktxt [filename] : create a text-file (in the command-line)\n\r
+                mkbin [filename] : create (executable) binary file (Intel-hex format)\n\r
+  chmod [filename] [permissions] : change file permissions\n\r
+                            date : print local date-time\n\r
+                    ./[filename] : execute file as a program\n\r
+                             cls : clear screen\n\r

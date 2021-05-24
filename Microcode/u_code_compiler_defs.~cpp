@@ -1,0 +1,55 @@
+//---------------------------------------------------------------------------
+
+#include <vcl.h>
+
+
+
+#pragma hdrstop
+
+#include "u_code_compiler_defs.h"
+                         
+//---------------------------------------------------------------------------
+
+#pragma package(smart_init)
+
+                        
+#define ID_LEN 32
+#define TOTAL_CONTROL_BITS 17 * 8
+#define MAX_CYCLES_PER_INSTR 16
+#define TOTAL_INSTRUCTIONS 4096
+
+#define CONTROL_WORD_FILE_LENGTH 5000
+
+class CONTROL_BIT{
+	public:
+    	DWORD id;
+    	char name[ID_LEN];
+        
+};
+
+class CONTROLBIT_VAL : public CONTROL_BIT{
+	public:
+        BYTE value;
+};
+
+class CYCLE{
+	public:
+    	CONTROLBIT_VAL control_bit[TOTAL_CONTROL_BITS];
+};
+
+
+
+class INSTRUCTION{
+	public:
+        WORD opcode;
+    	char mnemonic[ID_LEN];
+        WORD nbr_cycles;																																																								
+        CYCLE cycle[MAX_CYCLES_PER_INSTR];
+        
+};
+
+
+
+INSTRUCTION instructions[TOTAL_INSTRUCTIONS];
+
+

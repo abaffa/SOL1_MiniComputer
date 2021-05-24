@@ -1,0 +1,269 @@
+const MAX_GATE_INPUTS = 10;
+
+enum VALUE {zero, one, highz, xx};
+enum PIN_MODE {input, output};
+
+enum TOOL {tool_net, tool_component};
+enum COMPONENT_TYPE {dff, buffer, gate, decoder, mux};
+enum GATE_TYPE {not, and, or, nand, nor, xor};
+
+class net{
+	public:
+    	DWORD id;
+        VALUE val;
+
+        TPoint p1, p2;	// screen coordinates
+};
+
+/*
+			 ________
+  IN1	----|        |
+  IN2  	----|  GATE  |------- OUTPUT NET
+  IN3  	----|________|
+
+*/
+
+class component{
+	public:
+    	DWORD id;
+};
+
+class inputPIN{
+	public:
+    	DWORD id;		// pin ID 
+        DWORD netid;	/* what net is this attached to ? */
+        VALUE val;      // pin value
+};
+class outputPIN{
+	public:
+    	DWORD id;		// pin ID
+        DWORD netid;	/* what net is this attached to ? */
+        VALUE val;      // pin value
+};
+
+class _2mux : public component{
+	public:
+        inputPIN A[8], B[8];
+        outputPIN Y[8];
+        inputPIN sel;
+
+        void update(){
+            if(sel.val == zero){
+            	Y[0].val = A[0].val;
+                Y[1].val = A[1].val;
+                Y[2].val = A[2].val;
+                Y[3].val = A[3].val;
+                Y[4].val = A[4].val;
+                Y[5].val = A[5].val;
+                Y[6].val = A[6].val;
+                Y[7].val = A[7].val;
+            }
+            else if(sel.val == one){
+            	Y[0].val = B[0].val;
+                Y[1].val = B[1].val;
+                Y[2].val = B[2].val;
+                Y[3].val = B[3].val;
+                Y[4].val = B[4].val;
+                Y[5].val = B[5].val;
+                Y[6].val = B[6].val;
+                Y[7].val = B[7].val;
+            }
+            else {
+            	Y[0].val = xx;
+                Y[1].val = xx;
+                Y[2].val = xx;
+                Y[3].val = xx;
+                Y[4].val = xx;
+                Y[5].val = xx;
+                Y[6].val = xx;
+                Y[7].val = xx;
+            }
+        }
+};
+
+class _4mux : public component{
+	public:
+        inputPIN A[8], B[8], C[8], D[8];
+        outputPIN Y[8];
+        inputPIN sel[2];
+
+        void update(){
+            if(sel[0].val == zero && sel[1].val == zero){
+            	Y[0].val = A[0].val;
+                Y[1].val = A[1].val;
+                Y[2].val = A[2].val;
+                Y[3].val = A[3].val;
+                Y[4].val = A[4].val;
+                Y[5].val = A[5].val;
+                Y[6].val = A[6].val;
+                Y[7].val = A[7].val;
+            }
+            else if(sel[0].val == one && sel[1].val == zero){
+            	Y[0].val = B[0].val;
+                Y[1].val = B[1].val;
+                Y[2].val = B[2].val;
+                Y[3].val = B[3].val;
+                Y[4].val = B[4].val;
+                Y[5].val = B[5].val;
+                Y[6].val = B[6].val;
+                Y[7].val = B[7].val;
+            }
+            else if(sel[0].val == zero && sel[1].val == one){
+            	Y[0].val = C[0].val;
+                Y[1].val = C[1].val;
+                Y[2].val = C[2].val;
+                Y[3].val = C[3].val;
+                Y[4].val = C[4].val;
+                Y[5].val = C[5].val;
+                Y[6].val = C[6].val;
+                Y[7].val = C[7].val;
+            }
+            else if(sel[0].val == one && sel[1].val == one){
+            	Y[0].val = D[0].val;
+                Y[1].val = D[1].val;
+                Y[2].val = D[2].val;
+                Y[3].val = D[3].val;
+                Y[4].val = D[4].val;
+                Y[5].val = D[5].val;
+                Y[6].val = D[6].val;
+                Y[7].val = D[7].val;
+            }
+            else {
+            	Y[0].val = xx;
+                Y[1].val = xx;
+                Y[2].val = xx;
+                Y[3].val = xx;
+                Y[4].val = xx;
+                Y[5].val = xx;
+                Y[6].val = xx;
+                Y[7].val = xx;
+            }
+        }
+};
+
+class ROM{
+	public:
+    	inputPIN CE, OE, WE;
+    	outputPIN q[64*1024];
+
+        VALUE get(DWORD address){
+        	return q[address].val;
+        }
+        
+        void set(DWORD address, VALUE val){
+        	q[address].val = val;
+        }
+};
+
+class _74HC04 : public component{    	
+    public:
+        inputPIN input;
+        outputPIN output;
+        TPoint p;
+};
+
+// 2 AND
+class _74HC08 : public component{    	
+    public:
+        inputPIN input[2];
+        outputPIN output;
+        TPoint p;
+
+        VALUE update(){
+        	if(input[0].val == one && input[1].val == one){
+             	output.val = one;
+        		return one;
+            }
+			else{
+            	output.val = zero;
+            	return 0;
+            }
+        }
+};
+
+// 2 NAND
+class _74HC00 : public component{    	
+    public:
+        inputPIN input[2];
+        outputPIN output;
+        TPoint p;
+
+        VALUE update(){
+        	if(input[0].val == one && input[1].val == one){
+             	output.val = zero;
+        		return one;
+            }
+			else{
+            	output.val = one;
+            	return 0;
+            }
+        }
+};
+
+// 2 OR
+class _74HC36 : public component{    	
+    public:
+        inputPIN input[2];
+        outputPIN output;
+        TPoint p;
+
+        VALUE update(){
+        	if(input[0].val == one || input[1].val == one){
+             	output.val = one;
+        		return one;
+            }
+			else{
+            	output.val = zero;
+            	return 0;
+            }
+        }
+};
+// 2 NOR
+class _74HC32 : public component{    	
+    public:
+        inputPIN input[2];
+        outputPIN output;
+        TPoint p;
+
+        VALUE update(){
+        	if(input[0].val == one || input[1].val == one){
+             	output.val = zero;
+        		return one;
+            }
+			else{
+            	output.val = one;
+            	return 0;
+            }
+        }
+};
+
+class _74HC273{
+	public:
+    	inputPIN d[8];
+        outputPIN q[8];
+        inputPIN clk;
+        inputPIN clear;
+        
+        void clk_tick(){
+        	int i;
+        	if(clk.val == one)
+            	for(i = 0; i < 8; i++)
+                	q[i].val = d[i].val;
+		}
+};
+
+class _74HC377{
+	public:
+    	inputPIN d[8];
+        outputPIN q[8];
+        inputPIN clk;
+        inputPIN G;
+        
+        void clk_tick(){
+        	int i;
+        	if(clk.val == one && G.val == zero)
+            	for(i = 0; i < 8; i++)
+                	q[i].val = d[i].val;
+		}
+};
+ 

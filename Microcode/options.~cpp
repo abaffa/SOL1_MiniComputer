@@ -1,0 +1,71 @@
+//---------------------------------------------------------------------------
+
+#include <vcl.h>
+#pragma hdrstop
+
+#include "options.h"
+#include "sim.h"
+//---------------------------------------------------------------------------
+#pragma package(smart_init)
+#pragma resource "*.dfm"
+Tfoptions *foptions;
+//---------------------------------------------------------------------------
+__fastcall Tfoptions::Tfoptions(TComponent* Owner)
+        : TForm(Owner)
+{
+}
+//---------------------------------------------------------------------------
+void __fastcall Tfoptions::Button2Click(TObject *Sender)
+{
+        foptions->Close();        
+}
+//---------------------------------------------------------------------------
+
+void __fastcall Tfoptions::Button15Click(TObject *Sender)
+{
+        FontDialog1->Font->Name = fmain->memo_text11->Font->Name;
+        FontDialog1->Font->Size = fmain->memo_text11->Font->Size;
+        FontDialog1->Font->Style = fmain->memo_text11->Font->Style;
+
+        if(FontDialog1->Execute()){
+                fmain->memo_text11->Font->Name = FontDialog1->Font->Name;
+                fmain->memo_text11->Font->Size = FontDialog1->Font->Size;
+                fmain->memo_text11->Font->Style = FontDialog1->Font->Style;
+                fmain->ListBox2->Font->Color = FontDialog1->Font->Color;
+        }
+}
+//---------------------------------------------------------------------------
+
+
+
+
+
+
+void __fastcall Tfoptions::Button1Click(TObject *Sender)
+{
+        ColorDialog1->Color = fmain->memo_text11->Color;
+        if(ColorDialog1->Execute() == true){
+
+
+                fmain->list_mark->Color = ColorDialog1->Color;
+                fmain->memo_text11->Color = ColorDialog1->Color;
+                fmain->ListBox2->Color = ColorDialog1->Color;
+                fmain->ListBox2->Font->Color = ColorDialog1->Color;
+
+        }
+}
+//---------------------------------------------------------------------------
+
+
+void __fastcall Tfoptions::Button3Click(TObject *Sender)
+{
+        ColorDialog1->Color = fmain->memo_text11->Font->Color;
+        if(ColorDialog1->Execute() == true){
+                fmain->list_mark->Font->Color = ColorDialog1->Color;
+                fmain->memo_text11->Font->Color = ColorDialog1->Color;
+                fmain->ListBox2->Font->Color = ColorDialog1->Color;
+        }
+}
+//---------------------------------------------------------------------------
+
+

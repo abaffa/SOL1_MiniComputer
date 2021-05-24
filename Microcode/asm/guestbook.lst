@@ -1,0 +1,452 @@
+0001   0000             .include bios.exp
+0001+  0000             bkpt             .EQU  $0000
+0002+  0000             ide_serv         .EQU  $0004
+0003+  0000             kernel_serv      .EQU  $0001
+0004+  0000             misc             .EQU  $0008
+0005+  0000             print_u16x       .EQU  $0005
+0006+  0000             rtc_serv         .EQU  $0002
+0007+  0000             scan_u16x        .EQU  $0006
+0008+  0000             uart_serv        .EQU  $0003
+0009+  0000             xput_u8          .EQU  $0007
+0002   8000             .org $8000
+0003   8000             
+0004   8000             
+0005   8000             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0006   8000             ; GUESTBOOK
+0007   8000             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0008   8000             _open_guest:
+0009   8000 F8 00 02    	enter 512	
+0010   8003 3B E0 81    	mov d, s_guest_welcome
+0011   8006 07 2C 81    	call puts
+0012   8009             __guest_menu_loop:
+0013   8009 3B 63 82    	mov d, s_guest_menu
+0014   800C 07 2C 81    	call puts
+0015   800F             __get_guest_choice:
+0016   800F 48          	mov a, sp
+0017   8010 77          	inc a
+0018   8011 3C          	mov d, a
+0019   8012 07 42 81    	call gets						; get choice
+0020   8015 1E          	mov al, [d]
+0021   8016 6F 30       	sub al, 30h
+0022   8018 B9 03       	cmp al, 3
+0023   801A C6 31 80    	je _guest_quit
+0024   801D B9 02       	cmp al, 2
+0025   801F D1 0F 80    	jgu __get_guest_choice				; check bounds
+0026   8022 3A 01       	mov cl, 1
+0027   8024 9E          	shl al, cl
+0028   8025 22 00       	mov ah, 0
+0029   8027 FD 07 36 80 	call [a + __guest_menu_jump_table]
+0030   802B             
+0031   802B 07 60 81    	call put_NL2
+0032   802E 0A 09 80    	jmp __guest_menu_loop
+0033   8031             _guest_quit:
+0034   8031 07 60 81    	call put_NL2
+0035   8034 F9          	leave
+0036   8035 09          	ret
+0037   8036             
+0038   8036             ; ***********************************************************************
+0039   8036             ; GUESTBOOK JUMP TABLE
+0040   8036             ; index of latest message stored in RTC RAM area address FFA0h-FFA1h
+0041   8036             ; ***********************************************************************************
+0042   8036             __guest_menu_jump_table:
+0043   8036 78 80       	.dw _guest_sign
+0044   8038 3E 80       	.dw _guest_list
+0045   803A A7 80       	.dw _guestbook_set
+0046   803C 31 80       	.dw _guest_quit
+0047   803E             
+0048   803E             _guest_list:
+0049   803E F8 00 02    	enter 512					; message block
+0050   8041 3B CB 82    	mov d, s_guest_list
+0051   8044 07 2C 81    	call puts
+0052   8047             	clra	
+guestbook.asm line 0052: unrecognized instruction.          (CLRA)
+0053   8047             __guest_list_loop:
+0054   8047 DB          	push al
+0055   8048 19 02       	mov al, 2
+0056   804A 05 08       	syscall misc					; read message count
+0057   804C E8          	pop al
+0058   804D B0          	cmp a, b					
+0059   804E C9 76 80    	jgeu __guest_list_end	
+0060   8051 27          	mov b, a						; load LBA[1:0] = index
+0061   8052 38 01 00    	mov c, 1						; LBA[3:2] = 1
+0062   8055             
+0063   8055 D7          	push a						; save index
+0064   8056 07 83 81    	call print_u16d				; display message index
+0065   8059 10 01 29    	mov a, $2901
+0066   805C 05 03       	syscall uart_serv
+0067   805E 10 01 20    	mov a, $2001
+0068   8061 05 03       	syscall uart_serv				; brackets
+0069   8063             
+0070   8063 FA 01 FE    	lea d, [bp +- 511]			; pointer to message block start		
+0071   8066             
+0072   8066 10 02 01    	mov a, $0102					; 1 sector, read
+0073   8069 05 04       	syscall ide_serv				; read message onto block
+0074   806B 07 2C 81    	call puts					; display message
+0075   806E 07 74 81    	call put_nl
+0076   8071 E4          	pop a						; retrieve index
+0077   8072 77          	inc a						; inc index
+0078   8073 0A 47 80    	jmp __guest_list_loop
+0079   8076             __guest_list_end:
+0080   8076 F9          	leave
+0081   8077 09          	ret
+0082   8078             
+0083   8078             _guest_sign:
+0084   8078 07 74 81    	call put_nl
+0085   807B F8 00 02    	enter 512					; space for message
+0086   807E 3B B6 82    	mov d, s_guest_new
+0087   8081 07 2C 81    	call puts
+0088   8084 FD FA 01 00 	lea d, [sp + 1]
+0089   8088 07 42 81    	call gets					; input message string
+0090   808B 19 02       	mov al, 2
+0091   808D 05 08       	syscall misc
+0092   808F D8          	push b						; save count / set LBA
+0093   8090 38 01 00    	mov c, 1						; set LBA
+0094   8093 10 03 01    	mov a, $0103					; 1 sector, write
+0095   8096 05 04       	syscall ide_serv
+0096   8098 E5          	pop b						; retrieve count
+0097   8099 FD 77       	inc b
+0098   809B 19 03       	mov al, 3
+0099   809D 05 08       	syscall misc					; update count
+0100   809F             	
+0101   809F 3B F7 82    	mov d, s_guest_thanks
+0102   80A2 07 2C 81    	call puts					; thanks message
+0103   80A5 F9          	leave
+0104   80A6 09          	ret
+0105   80A7             
+0106   80A7             _guestbook_set:
+0107   80A7 3B CB 80    	mov d, s_pw
+0108   80AA 07 2C 81    	call puts
+0109   80AD 07 D6 80    	call scan_u16d		; value in A
+0110   80B0 AF C2 07    	cmp a, 1986
+0111   80B3 C7 CA 80    	jne _guestbook_set_end
+0112   80B6 3B C4 81    	mov d, s_guestbook_count
+0113   80B9 07 2C 81    	call puts
+0114   80BC 07 D6 80    	call scan_u16d		; value in A
+0115   80BF 27          	mov b, a
+0116   80C0 19 03       	mov al, 3
+0117   80C2 05 08       	syscall misc
+0118   80C4 3B D8 81    	mov d, s_OK
+0119   80C7 07 2C 81    	call puts
+0120   80CA             _guestbook_set_end:
+0121   80CA 09          	ret
+0122   80CB             
+0123   80CB 50 61 73 73 s_pw: .db "Password: ", 0
+0123   80CF 77 6F 72 64 
+0123   80D3 3A 20 00 
+0124   80D6             
+0125   80D6             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0126   80D6             ; input decimal number	
+0127   80D6             ; result in A
+0128   80D6             ; 655'\0'
+0129   80D6             ; low--------high
+0130   80D6             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0131   80D6             scan_u16d:
+0132   80D6 F8 08 00    	enter 8
+0133   80D9 E2          	push si
+0134   80DA D8          	push b
+0135   80DB D9          	push c
+0136   80DC DA          	push d
+0137   80DD             	
+0138   80DD FA F9 FF    	lea d, [bp +- 7]
+0139   80E0 07 42 81    	call gets
+0140   80E3 07 1A 81    	call strlen			; get string length in C
+0141   80E6 7E          	dec c	
+0142   80E7             	
+0143   80E7 FD 4E       	mov si, d
+0144   80E9             	
+0145   80E9 12          	mov a, c
+0146   80EA FD 99       	shl a
+0147   80EC 3B 10 81    	mov d, table_power
+0148   80EF 59          	add d, a
+0149   80F0 38 00 00    	mov c, 0
+0150   80F3             mul_loop:
+0151   80F3 F6          	lodsb			; load ASCII to al
+0152   80F4 B9 00       	cmp al, 0
+0153   80F6 C6 09 81    	je mul_exit
+0154   80F9 6F 30       	sub al, $30		; make into integer
+0155   80FB 22 00       	mov ah, 0
+0156   80FD 2A          	mov b, [d]
+0157   80FE AC          	mul a, b			; result in B since it fits in 16bits
+0158   80FF 11          	mov a, b
+0159   8100 28          	mov b, c
+0160   8101 54          	add a, b
+0161   8102 39          	mov c, a
+0162   8103 63 02 00    	sub d, 2
+0163   8106 0A F3 80    	jmp mul_loop
+0164   8109             mul_exit:
+0165   8109 12          	mov a, c
+0166   810A E7          	pop d
+0167   810B E6          	pop c
+0168   810C E5          	pop b
+0169   810D EF          	pop si
+0170   810E F9          	leave
+0171   810F 09          	ret
+0172   8110             	
+0173   8110             table_power:
+0174   8110 01 00       	.dw 1
+0175   8112 0A 00       	.dw 10
+0176   8114 64 00       	.dw 100
+0177   8116 E8 03       	.dw 1000
+0178   8118 10 27       	.dw 10000
+0179   811A             
+0180   811A             
+0181   811A             	
+0182   811A             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0183   811A             ; length of null terminated string
+0184   811A             ; result in C
+0185   811A             ; pointer in D
+0186   811A             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0187   811A             strlen:
+0188   811A DA          	push d
+0189   811B DB          	push al
+0190   811C 38 00 00    	mov c, 0
+0191   811F             strlen_L1:
+0192   811F BD 00       	cmp byte [d], 0
+0193   8121 C6 29 81    	je strlen_ret
+0194   8124 79          	inc d
+0195   8125 78          	inc c
+0196   8126 0A 1F 81    	jmp strlen_L1	
+0197   8129             strlen_ret:
+0198   8129 E8          	pop al
+0199   812A E7          	pop d
+0200   812B 09          	ret
+0201   812C             
+0202   812C             
+0203   812C             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0204   812C             ; PRINT NULL TERMINATED STRING
+0205   812C             ; pointer in D
+0206   812C             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0207   812C             puts:
+0208   812C E1          	pushf
+0209   812D D7          	push a
+0210   812E DA          	push d
+0211   812F             puts_L1:
+0212   812F 1E          	mov al, [d]
+0213   8130 B9 00       	cmp al, 0
+0214   8132 C6 3E 81    	jz puts_END
+0215   8135 23          	mov ah, al
+0216   8136 19 01       	mov al, 1
+0217   8138 05 03       	syscall uart_serv
+0218   813A 79          	inc d	
+0219   813B 0A 2F 81    	jmp puts_L1
+0220   813E             puts_END:
+0221   813E E7          	pop d
+0222   813F E4          	pop a
+0223   8140 EE          	popf
+0224   8141 09          	ret
+0225   8142             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0226   8142             ;; INPUT A STRING
+0227   8142             ;; terminates with null
+0228   8142             ;; pointer in D
+0229   8142             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0230   8142             gets:
+0231   8142 E1          	pushf
+0232   8143 D7          	push a
+0233   8144 DA          	push d
+0234   8145             gets_loop:
+0235   8145 19 03       	mov al, 3
+0236   8147 05 03       	syscall uart_serv			; receive in AH
+0237   8149 76 0A       	cmp ah, 0Ah				; cr
+0238   814B C6 59 81    	je gets_end
+0239   814E 76 0D       	cmp ah, 0Dh				; cr
+0240   8150 C6 59 81    	je gets_end
+0241   8153 1A          	mov al, ah
+0242   8154 3E          	mov [d], al
+0243   8155 79          	inc d
+0244   8156 0A 45 81    	jmp gets_loop
+0245   8159             gets_end:
+0246   8159 19 00       	mov al, 0
+0247   815B 3E          	mov [d], al				; terminate string
+0248   815C E7          	pop d
+0249   815D E4          	pop a
+0250   815E EE          	popf
+0251   815F 09          	ret
+0252   8160             	
+0253   8160             	
+0254   8160             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0255   8160             ; PRINT 2 NEW LINES
+0256   8160             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0257   8160             put_NL2:
+0258   8160 E1          	pushf
+0259   8161 D7          	push a
+0260   8162 10 01 0A    	mov a, $0A01
+0261   8165 05 03       	syscall uart_serv
+0262   8167 10 01 0A    	mov a, $0A01
+0263   816A 05 03       	syscall uart_serv
+0264   816C 10 01 0D    	mov a, $0D01
+0265   816F 05 03       	syscall uart_serv
+0266   8171 E4          	pop a
+0267   8172 EE          	popf
+0268   8173 09          	ret
+0269   8174             	
+0270   8174             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0271   8174             ; PRINT NEW LINE
+0272   8174             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0273   8174             put_nl:
+0274   8174 E1          	pushf
+0275   8175 D7          	push a
+0276   8176 10 01 0A    	mov a, $0A01
+0277   8179 05 03       	syscall uart_serv
+0278   817B 10 01 0D    	mov a, $0D01
+0279   817E 05 03       	syscall uart_serv
+0280   8180 E4          	pop a
+0281   8181 EE          	popf
+0282   8182 09          	ret
+0283   8183             	
+0284   8183             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0285   8183             ; print 16bit decimal number	
+0286   8183             ; input number in A
+0287   8183             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0288   8183             print_u16d:
+0289   8183 D7          	push a
+0290   8184 D8          	push b
+0291   8185             	
+0292   8185 26 10 27    	mov b, 10000
+0293   8188 AE          	div a, b			; get 10000 coeff.
+0294   8189 D8          	push b			; save remainder
+0295   818A 6A 30       	add al, $30
+0296   818C 23          	mov ah, al
+0297   818D 19 01       	mov al, 1
+0298   818F 05 03       	syscall uart_serv	; print coeff
+0299   8191 E4          	pop a
+0300   8192             	
+0301   8192 26 E8 03    	mov b, 1000
+0302   8195 AE          	div a, b			; get 10000 coeff.
+0303   8196 D8          	push b			; save remainder
+0304   8197 6A 30       	add al, $30
+0305   8199 23          	mov ah, al
+0306   819A 19 01       	mov al, 1
+0307   819C 05 03       	syscall uart_serv	; print coeff
+0308   819E E4          	pop a
+0309   819F             	
+0310   819F 26 64 00    	mov b, 100
+0311   81A2 AE          	div a, b			
+0312   81A3 D8          	push b			; save remainder
+0313   81A4 6A 30       	add al, $30
+0314   81A6 23          	mov ah, al
+0315   81A7 19 01       	mov al, 1
+0316   81A9 05 03       	syscall uart_serv	; print coeff
+0317   81AB E4          	pop a
+0318   81AC             	
+0319   81AC 26 0A 00    	mov b, 10
+0320   81AF AE          	div a, b			
+0321   81B0 D8          	push b			; save remainder
+0322   81B1 6A 30       	add al, $30
+0323   81B3 23          	mov ah, al
+0324   81B4 19 01       	mov al, 1
+0325   81B6 05 03       	syscall uart_serv	; print coeff
+0326   81B8 E4          	pop a
+0327   81B9             	
+0328   81B9 1B          	mov al, bl
+0329   81BA 6A 30       	add al, $30
+0330   81BC 23          	mov ah, al
+0331   81BD 19 01       	mov al, 1
+0332   81BF 05 03       	syscall uart_serv	; print coeff
+0333   81C1 E5          	pop b
+0334   81C2 E4          	pop a
+0335   81C3 09          	ret
+0336   81C4             
+0337   81C4             
+0338   81C4 4E 75 6D 62 s_guestbook_count:	.db "Number of entries? ", 0
+0338   81C8 65 72 20 6F 
+0338   81CC 66 20 65 6E 
+0338   81D0 74 72 69 65 
+0338   81D4 73 3F 20 00 
+0339   81D8 0A 0D 4F 4B s_OK: 				.db "\n\rOK.\n\r", 0
+0339   81DC 2E 0A 0D 00 
+0340   81E0             
+0341   81E0             
+0342   81E0 0A 0D 57 65 s_guest_welcome:	.db "\n\rWelcome to the visitors guestbook! "
+0342   81E4 6C 63 6F 6D 
+0342   81E8 65 20 74 6F 
+0342   81EC 20 74 68 65 
+0342   81F0 20 76 69 73 
+0342   81F4 69 74 6F 72 
+0342   81F8 73 20 67 75 
+0342   81FC 65 73 74 62 
+0342   8200 6F 6F 6B 21 
+0342   8204 20 
+0343   8205 54 68 65 73 				.db "These messages are saved in "
+0343   8209 65 20 6D 65 
+0343   820D 73 73 61 67 
+0343   8211 65 73 20 61 
+0343   8215 72 65 20 73 
+0343   8219 61 76 65 64 
+0343   821D 20 69 6E 20 
+0344   8221 61 6E 20 6F 				.db "an old school 2.5-inch IDE "
+0344   8225 6C 64 20 73 
+0344   8229 63 68 6F 6F 
+0344   822D 6C 20 32 2E 
+0344   8231 35 2D 69 6E 
+0344   8235 63 68 20 49 
+0344   8239 44 45 20 
+0345   823C 68 61 72 64 				.db "hard drive.\n\r"
+0345   8240 20 64 72 69 
+0345   8244 76 65 2E 0A 
+0345   8248 0D 
+0346   8249 48 65 72 65 				.db "Here are the options...\n\r", 0
+0346   824D 20 61 72 65 
+0346   8251 20 74 68 65 
+0346   8255 20 6F 70 74 
+0346   8259 69 6F 6E 73 
+0346   825D 2E 2E 2E 0A 
+0346   8261 0D 00 
+0347   8263             
+0348   8263 30 2E 20 53 s_guest_menu:		.db "0. Sign guestbook\n\r"
+0348   8267 69 67 6E 20 
+0348   826B 67 75 65 73 
+0348   826F 74 62 6F 6F 
+0348   8273 6B 0A 0D 
+0349   8276 31 2E 20 4C 				.db "1. List guestbook entries\n\r"
+0349   827A 69 73 74 20 
+0349   827E 67 75 65 73 
+0349   8282 74 62 6F 6F 
+0349   8286 6B 20 65 6E 
+0349   828A 74 72 69 65 
+0349   828E 73 0A 0D 
+0350   8291 32 2E 20 53 				.db "2. Set total\n\r"
+0350   8295 65 74 20 74 
+0350   8299 6F 74 61 6C 
+0350   829D 0A 0D 
+0351   829F 33 2E 20 5B 				.db "3. [Close guestbook]\n\r", 0
+0351   82A3 43 6C 6F 73 
+0351   82A7 65 20 67 75 
+0351   82AB 65 73 74 62 
+0351   82AF 6F 6F 6B 5D 
+0351   82B3 0A 0D 00 
+0352   82B6             				
+0353   82B6 45 6E 74 65 s_guest_new:		.db "Enter your message: ", 0
+0353   82BA 72 20 79 6F 
+0353   82BE 75 72 20 6D 
+0353   82C2 65 73 73 61 
+0353   82C6 67 65 3A 20 
+0353   82CA 00 
+0354   82CB 48 65 72 65 s_guest_list:		.db "Here are all the messages"
+0354   82CF 20 61 72 65 
+0354   82D3 20 61 6C 6C 
+0354   82D7 20 74 68 65 
+0354   82DB 20 6D 65 73 
+0354   82DF 73 61 67 65 
+0354   82E3 73 
+0355   82E4 20 6C 65 66 				.db " left so far...\n\n\r", 0
+0355   82E8 74 20 73 6F 
+0355   82EC 20 66 61 72 
+0355   82F0 2E 2E 2E 0A 
+0355   82F4 0A 0D 00 
+0356   82F7 0A 0D 59 6F s_guest_thanks:	.db "\n\rYour message has been "
+0356   82FB 75 72 20 6D 
+0356   82FF 65 73 73 61 
+0356   8303 67 65 20 68 
+0356   8307 61 73 20 62 
+0356   830B 65 65 6E 20 
+0357   830F 73 61 76 65 				.db "saved. Thank you for signing!\n\r", 0
+0357   8313 64 2E 20 54 
+0357   8317 68 61 6E 6B 
+0357   831B 20 79 6F 75 
+0357   831F 20 66 6F 72 
+0357   8323 20 73 69 67 
+0357   8327 6E 69 6E 67 
+0357   832B 21 0A 0D 00 
+0358   832F             				
+0359   832F             				
+0360   832F             .endtasm: Number of errors = 1

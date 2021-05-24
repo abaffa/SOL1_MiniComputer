@@ -1,0 +1,1 @@
+I was wondering, how come you used 74 hc logic, why not ls or als or hct?

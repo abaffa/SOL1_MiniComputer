@@ -1,0 +1,284 @@
+0001   0000             .include kernel.exp
+0001+  0000             sys_ide_kernel   .EQU  $0002
+0002+  0000             sys_io           .EQU  $0003
+0003+  0000             sys_fileio       .EQU  $0004
+0004+  0000             sys_fork         .EQU  $0005
+0005+  0000             sys_fwb          .EQU  $0006
+0006+  0000             sys_fwk          .EQU  $0007
+0007+  0000             sys_ide          .EQU  $0008
+0008+  0000             sys_en           .EQU  $0009
+0009+  0000             sys_list         .EQU  $000a
+0002   0000             
+0003   0000             .org 0
+0004   0000             
+0005   0000             
+0006   0000             primes:
+0007   0000 3B 3A 01    	mov d, s_max
+0008   0003 07 E1 00    	call puts
+0009   0006 07 41 00    	call scan_u16d
+0010   0009 42 38 01    	mov [max], a
+0011   000C 10 02 00    	mov a, 2
+0012   000F             primes_L1:
+0013   000F 38 02 00    	mov c, 2	
+0014   0012             primes_L2:
+0015   0012 D7          	push a
+0016   0013 28          	mov b, c
+0017   0014 AE          	div a, b
+0018   0015 C0 00 00    	cmp b, 0
+0019   0018 C6 20 00    	jz divisible
+0020   001B 78          	inc c
+0021   001C E4          	pop a
+0022   001D 0A 12 00    	jmp primes_L2		
+0023   0020             divisible:
+0024   0020 E4          	pop a
+0025   0021 B1          	cmp a, c
+0026   0022 C7 36 00    	jnz notprime			
+0027   0025             isprime:
+0028   0025 07 D2 00    	call put_nl
+0029   0028 07 F7 00    	call print_u16d		; display number
+0030   002B 77          	inc a
+0031   002C 29 38 01    	mov b, [max]
+0032   002F B0          	cmp a, b
+0033   0030 C9 3A 00    	jgeu primes_ret
+0034   0033 0A 0F 00    	jmp primes_L1
+0035   0036             notprime:
+0036   0036 77          	inc a
+0037   0037 0A 0F 00    	jmp primes_L1		
+0038   003A             primes_ret:
+0039   003A 07 D2 00    	call put_nl
+0040   003D 07 D2 00    	call put_nl
+0041   0040 09          	ret
+0042   0041             
+0043   0041             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0044   0041             ; input decimal number	
+0045   0041             ; result in A
+0046   0041             ; 655'\0'
+0047   0041             ; low--------high
+0048   0041             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0049   0041             scan_u16d:
+0050   0041 F8 08 00    	enter 8
+0051   0044 E2          	push si
+0052   0045 D8          	push b
+0053   0046 D9          	push c
+0054   0047 DA          	push d
+0055   0048             	
+0056   0048 FA F9 FF    	lea d, [bp +- 7]
+0057   004B 07 8D 00    	call gets
+0058   004E 07 7B 00    	call strlen			; get string length in C
+0059   0051 7E          	dec c	
+0060   0052             	
+0061   0052 FD 4E       	mov si, d
+0062   0054             	
+0063   0054 12          	mov a, c
+0064   0055 FD 99       	shl a
+0065   0057 3B 4A 01    	mov d, table_power
+0066   005A 59          	add d, a
+0067   005B 38 00 00    	mov c, 0
+0068   005E             mul_loop:
+0069   005E F6          	lodsb			; load ASCII to al
+0070   005F B9 00       	cmp al, 0
+0071   0061 C6 74 00    	je mul_exit
+0072   0064 6F 30       	sub al, $30		; make into integer
+0073   0066 22 00       	mov ah, 0
+0074   0068 2A          	mov b, [d]
+0075   0069 AC          	mul a, b			; result in B since it fits in 16bits
+0076   006A 11          	mov a, b
+0077   006B 28          	mov b, c
+0078   006C 54          	add a, b
+0079   006D 39          	mov c, a
+0080   006E 63 02 00    	sub d, 2
+0081   0071 0A 5E 00    	jmp mul_loop
+0082   0074             mul_exit:
+0083   0074 12          	mov a, c
+0084   0075 E7          	pop d
+0085   0076 E6          	pop c
+0086   0077 E5          	pop b
+0087   0078 EF          	pop si
+0088   0079 F9          	leave
+0089   007A 09          	ret
+0090   007B             
+0091   007B             
+0092   007B             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0093   007B             ; length of null terminated string
+0094   007B             ; result in C
+0095   007B             ; pointer in D
+0096   007B             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0097   007B             strlen:
+0098   007B DA          	push d
+0099   007C DB          	push al
+0100   007D 38 00 00    	mov c, 0
+0101   0080             strlen_L1:
+0102   0080 BD 00       	cmp byte [d], 0
+0103   0082 C6 8A 00    	je strlen_ret
+0104   0085 79          	inc d
+0105   0086 78          	inc c
+0106   0087 0A 80 00    	jmp strlen_L1	
+0107   008A             strlen_ret:
+0108   008A E8          	pop al
+0109   008B E7          	pop d
+0110   008C 09          	ret
+0111   008D             
+0112   008D             	
+0113   008D             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0114   008D             ;; INPUT A STRING
+0115   008D             ;; terminates with null
+0116   008D             ;; pointer in D
+0117   008D             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0118   008D             gets:
+0119   008D E1          	pushf
+0120   008E D7          	push a
+0121   008F DA          	push d
+0122   0090             gets_loop:
+0123   0090 19 01       	mov al, 1
+0124   0092 05 03       	syscall sys_io			; receive in AH
+0125   0094 76 0A       	cmp ah, 0Ah				; LF
+0126   0096 C6 CB 00    	je gets_end
+0127   0099 76 0D       	cmp ah, 0Dh				; CR
+0128   009B C6 CB 00    	je gets_end
+0129   009E 76 5C       	cmp ah, $5C				; '\\'
+0130   00A0 C6 A9 00    	je gets_escape
+0131   00A3 1A          	mov al, ah
+0132   00A4 3E          	mov [d], al
+0133   00A5 79          	inc d
+0134   00A6 0A 90 00    	jmp gets_loop
+0135   00A9             gets_escape:
+0136   00A9 19 01       	mov al, 1
+0137   00AB 05 03       	syscall sys_io			; receive in AH
+0138   00AD 76 6E       	cmp ah, 'n'
+0139   00AF C6 BD 00    	je gets_LF
+0140   00B2 76 72       	cmp ah, 'r'
+0141   00B4 C6 C4 00    	je gets_CR
+0142   00B7 1A          	mov al, ah				; if not a known escape, it is just a normal letter
+0143   00B8 3E          	mov [d], al
+0144   00B9 79          	inc d
+0145   00BA 0A 90 00    	jmp gets_loop
+0146   00BD             gets_LF:
+0147   00BD 19 0A       	mov al, $0A
+0148   00BF 3E          	mov [d], al
+0149   00C0 79          	inc d
+0150   00C1 0A 90 00    	jmp gets_loop
+0151   00C4             gets_CR:
+0152   00C4 19 0D       	mov al, $0D
+0153   00C6 3E          	mov [d], al
+0154   00C7 79          	inc d
+0155   00C8 0A 90 00    	jmp gets_loop
+0156   00CB             gets_end:
+0157   00CB 19 00       	mov al, 0
+0158   00CD 3E          	mov [d], al				; terminate string
+0159   00CE E7          	pop d
+0160   00CF E4          	pop a
+0161   00D0 EE          	popf
+0162   00D1 09          	ret
+0163   00D2             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0164   00D2             ; PRINT NEW LINE
+0165   00D2             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0166   00D2             put_nl:
+0167   00D2 E1          	pushf
+0168   00D3 D7          	push a
+0169   00D4 10 00 0A    	mov a, $0A00
+0170   00D7 05 03       	syscall sys_io
+0171   00D9 10 00 0D    	mov a, $0D00
+0172   00DC 05 03       	syscall sys_io
+0173   00DE E4          	pop a
+0174   00DF EE          	popf
+0175   00E0 09          	ret
+0176   00E1             
+0177   00E1             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0178   00E1             ; PRINT NULL TERMINATED STRING
+0179   00E1             ; pointer in D
+0180   00E1             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0181   00E1             puts:
+0182   00E1 E1          	pushf
+0183   00E2 D7          	push a
+0184   00E3 DA          	push d
+0185   00E4             puts_L1:
+0186   00E4 1E          	mov al, [d]
+0187   00E5 B9 00       	cmp al, 0
+0188   00E7 C6 F3 00    	jz puts_END
+0189   00EA 23          	mov ah, al
+0190   00EB 19 00       	mov al, 0
+0191   00ED 05 03       	syscall sys_io
+0192   00EF 79          	inc d	
+0193   00F0 0A E4 00    	jmp puts_L1
+0194   00F3             puts_END:
+0195   00F3 E7          	pop d
+0196   00F4 E4          	pop a
+0197   00F5 EE          	popf
+0198   00F6 09          	ret
+0199   00F7             
+0200   00F7             
+0201   00F7             
+0202   00F7             
+0203   00F7             	
+0204   00F7             
+0205   00F7             
+0206   00F7             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0207   00F7             ; print 16bit decimal number	
+0208   00F7             ; input number in A
+0209   00F7             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0210   00F7             print_u16d:
+0211   00F7 D7          	push a
+0212   00F8 D8          	push b
+0213   00F9             	
+0214   00F9 26 10 27    	mov b, 10000
+0215   00FC AE          	div a, b			; get 10000 coeff.
+0216   00FD D8          	push b			; save remainder
+0217   00FE 6A 30       	add al, $30
+0218   0100 23          	mov ah, al
+0219   0101 19 00       	mov al, 0
+0220   0103 05 03       	syscall sys_io	; print coeff
+0221   0105 E4          	pop a
+0222   0106             	
+0223   0106 26 E8 03    	mov b, 1000
+0224   0109 AE          	div a, b			; get 10000 coeff.
+0225   010A D8          	push b			; save remainder
+0226   010B 6A 30       	add al, $30
+0227   010D 23          	mov ah, al
+0228   010E 19 00       	mov al, 0
+0229   0110 05 03       	syscall sys_io	; print coeff
+0230   0112 E4          	pop a
+0231   0113             	
+0232   0113 26 64 00    	mov b, 100
+0233   0116 AE          	div a, b			
+0234   0117 D8          	push b			; save remainder
+0235   0118 6A 30       	add al, $30
+0236   011A 23          	mov ah, al
+0237   011B 19 00       	mov al, 0
+0238   011D 05 03       	syscall sys_io	; print coeff
+0239   011F E4          	pop a
+0240   0120             	
+0241   0120 26 0A 00    	mov b, 10
+0242   0123 AE          	div a, b			
+0243   0124 D8          	push b			; save remainder
+0244   0125 6A 30       	add al, $30
+0245   0127 23          	mov ah, al
+0246   0128 19 00       	mov al, 0
+0247   012A 05 03       	syscall sys_io	; print coeff
+0248   012C E4          	pop a
+0249   012D             	
+0250   012D 1B          	mov al, bl
+0251   012E 6A 30       	add al, $30
+0252   0130 23          	mov ah, al
+0253   0131 19 00       	mov al, 0
+0254   0133 05 03       	syscall sys_io	; print coeff
+0255   0135 E5          	pop b
+0256   0136 E4          	pop a
+0257   0137 09          	ret
+0258   0138             
+0259   0138             
+0260   0138 E8 03       max:	.dw 1000
+0261   013A             
+0262   013A 0A 0D 55 70 s_max: .db "\n\rUpper bound: ", 0
+0262   013E 70 65 72 20 
+0262   0142 62 6F 75 6E 
+0262   0146 64 3A 20 00 
+0263   014A             
+0264   014A             
+0265   014A             
+0266   014A 01 00       table_power:	.dw 1
+0267   014C 0A 00       			.dw 10
+0268   014E 64 00       			.dw 100
+0269   0150 E8 03       			.dw 1000
+0270   0152 10 27       			.dw 10000
+0271   0154             			
+0272   0154             .endtasm: Number of errors = 0

@@ -1,0 +1,208 @@
+0
+typ0
+typ1
+u_offset_0
+u_offset_1
+u_offset_2
+u_offset_3
+u_offset_4
+u_offset_5
+
+1
+u_offset_6
+cond_invert
+cond_flag_src
+cond_sel_0
+cond_sel_1
+cond_sel_2
+cond_sel_3
+
+2
+**** AY-BA
+U_ZF_IN_SRC_0
+U_ZF_IN_SRC_1
+U_CF_IN_SRC_0
+U_CF_IN_SRC_1
+U_SF_IN_SRC
+U_OF_IN_SRC
+IR_WRT
+STATUS_FLAGS_WRT
+
+3
+**** AU-AV
+SHIFT_MSB_SRC_0
+SHIFT_MSB_SRC_1
+SHIFT_MSB_SRC_2
+ZBUS_IN_SRC_0
+ZBUS_IN_SRC_1
+ALU_A_SRC_0		
+ALU_A_SRC_1		
+ALU_A_SRC_2
+
+4
+**** AP-AR
+ALU_A_SRC_3
+ALU_A_SRC_4
+ALU_A_SRC_5
+ALU_OP_0
+ALU_OP_1
+ALU_OP_2
+ALU_OP_3
+ALU_MODE
+
+5
+**** AU-AV 21
+ALU_CF_IN_SRC0
+ALU_CF_IN_SRC1
+ALU_CF_IN_INVERT
+ZF_IN_SRC_0
+ZF_IN_SRC_1
+ALU_CF_OUT_INVERT
+CF_IN_SRC_0
+CF_IN_SRC_1
+
+6
+**** AW-AX 31
+CF_IN_SRC_2
+SF_IN_SRC_0
+SF_IN_SRC_1
+OF_IN_SRC_0
+OF_IN_SRC_1
+OF_IN_SRC_2
+RD					
+WR					
+					
+
+
+only these signals are sent out to second board.
+ALU_A_SRC_0		
+ALU_A_SRC_1		
+ALU_A_SRC_2
+ALU_A_SRC_3
+ALU_A_SRC_4
+ALU_B_SRC_0
+ALU_B_SRC_1
+
+7
+**** BD-BE
+ALU_B_SRC_0
+ALU_B_SRC_1
+ALU_B_SRC_2
+DISPLAY_REG_LOAD						** used during fetch to select and load register display
+DL_WRT
+DH_WRT
+CL_WRT
+CH_WRT
+
+8
+BL_WRT
+BH_WRT
+AL_WRT
+AH_WRT
+MDR_IN_SRC
+MDR_OUT_SRC
+MDR_OUT_EN			<<< must invert before sending
+MDR_L_WRT			<< but there is no need to invert. we use active low micro-programming for these
+
+9
+MDR_H_WRT
+TDR_L_WRT
+TDR_H_WRT
+DI_L_WRT
+DI_H_WRT
+SI_L_WRT
+SI_H_WRT
+MAR_L_WRT
+
+10
+MAR_H_WRT
+BP_L_WRT
+BP_H_WRT
+PC_L_WRT
+PC_H_WRT
+SP_L_WRT
+SP_H_WRT
+UNUSED
+
+11
+UNUSED
+INT_VECTOR_WRT
+MASK_FLAGS_WRT		<< WRT signals are also active low, 	
+MAR_IN_SRC
+INT_ACK		--- active high
+CLEAR_ALL_INTS
+PTB_WRT
+PAGE_TABLE_WE
+
+12
+MDR_TO_PAGETABLE_DATA_BUFFER
+FORCE_USER_PTB --->>> goes to board as PAGE_TABLE_ADDR_SOURCE via OR gate
+unused
+unused
+unused
+unused
+gl_wrt
+gh_wrt
+
+
+13
+**** BW-BX 12
+IMMY_0
+IMMY_1
+IMMY_2
+IMMY_3
+IMMY_4
+IMMY_5
+IMMY_6
+IMMY_7
+
+
+
+Chasis available signals:
+13, 14
+17 .. 74
+
+backplane signals:
+
+CLK		13 and 31
+RST		14
+IDE_ACTIVITY	---- 22
+PANEL_REGSEL_4  ---- 23
+PANEL_REGSEL_3  ---- 24
+PANEL_REGSEL_2  ---- 25
+PANEL_REGSEL_1  ---- 26
+PANEL_REGSEL_0  ---- 27
+TRACE_CONTINUE	---- 28
+HALT			---- 29
+DMA_ACK			---- 30
+DMA_REQ			---- 32
+WAIT			---- at 33
+WR				---- at 34
+RD				---- at 35
+DATA_0-DATA_7	---- 43 start
+MEM_IO 			---- at 44 
+ADDR_0-ADDR_21 	---- 66 start
+INT_0-INT_7 	---- 74 start			- all these signals count downwards, so INT0 is at 74 and INT7 at 67
+
+FETCH 			- 00000001000000 = 0x0040 = 64d
+INTERRUPTION 	- 00000001010000 = 0x0050 = 80d
+
+
+
+wire at AX34 has a little cut. if something ever goes weird, check this.
+
+*********************************************************************************************
+
+
+22 bit address space + memIO bit
+
+
+*** PAGING OFF
+
+>> 64KB space 
+>> address space is mapped to device space
+>> 32KB ROM, rest is RAM + remaining devices
+
+
+
+Sol-1 runned its first program on 12th June 2020.

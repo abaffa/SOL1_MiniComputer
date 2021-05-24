@@ -1,0 +1,310 @@
+0001   0000             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0002   0000             ; PROCESS 1 DATA
+0003   0000             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0004   0000             .include bios.exp
+0001+  0000             ide_serv         .EQU  $0003
+0002+  0000             kernel_serv      .EQU  $0000
+0003+  0000             rtc_serv         .EQU  $0001
+0004+  0000             uart_serv        .EQU  $0002
+0005+  0000             xput_u16         .EQU  $0004
+0006+  0000             xget_u16         .EQU  $0005
+0007+  0000             xput_u8          .EQU  $0006
+0005   0000             .org 0
+0006   0000             
+0007   0000             PROCESS_2:
+0008   0000 FD 49 FF FF 	mov bp, $FFFF		
+0009   0004 52 00 02    	sub sp, 512					; choice space
+0010   0007             	
+0011   0007             main_menu_loop:
+0012   0007 07 A8 00    	call put_nl
+0013   000A 3B 5B 01    	mov d, s_help
+0014   000D 07 10 01    	call puts					; print help string
+0015   0010             get_choice:
+0016   0010 FA 01 FE    	lea d, [bp + -511]
+0017   0013 07 8F 00    	call gets					; get choice
+0018   0016 07 A8 00    	call put_nl
+0019   0019 1E          	mov al, [d]
+0020   001A B9 3F       	cmp al, '?'
+0021   001C C6 31 00    	je print_menu
+0022   001F 6F 30       	sub al, 30h
+0023   0021 B9 06       	cmp al, 6
+0024   0023 D1 10 00    	jgu get_choice				; check bounds
+0025   0026 FD 9A       	shl al
+0026   0028 22 00       	mov ah, 0
+0027   002A B7 3A 00    	mov a, [a + main_menu_jump_table]
+0028   002D 08          	call a
+0029   002E 0A 07 00    	jmp main_menu_loop
+0030   0031             print_menu:
+0031   0031 3B 26 01    	mov d, s_main_menu
+0032   0034 07 10 01    	call puts
+0033   0037 0A 07 00    	jmp main_menu_loop
+0034   003A             		
+0035   003A             
+0036   003A             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0037   003A             ; BIOS MENU JUMP TABLE
+0038   003A             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0039   003A             main_menu_jump_table:
+0040   003A 3E 00       	.dw swap
+0041   003C 47 00       	.dw mem_dump
+0042   003E             
+0043   003E             swap:
+0044   003E 05 00       	syscall kernel_serv
+0045   0040 3B 74 01    	mov d, s_ret
+0046   0043 07 10 01    	call puts
+0047   0046 09          	ret
+0048   0047             	
+0049   0047             
+0050   0047             mem_dump:
+0051   0047 3B 97 01    	mov d, s_origin_addr
+0052   004A 07 10 01    	call puts
+0053   004D 05 05       	syscall xget_u16					; read integer into A
+0054   004F 07 A8 00    	call put_nl
+0055   0052 3C          	mov d, a				; dump pointer in d
+0056   0053 38 00 00    	mov c, 0
+0057   0056             dump_loop:
+0058   0056 84          	mov al, cl
+0059   0057 93 0F       	test al, 0Fh
+0060   0059 C6 7C 00    	jz print_base
+0061   005C             back:
+0062   005C 1E          	mov al, [d]				; read byte
+0063   005D 2F          	mov bl, al
+0064   005E 07 D7 00    	call itoa				; convert number to char in A
+0065   0061 2F          	mov bl, al				; save AL
+0066   0062 19 01       	mov al, 1
+0067   0064 05 02       	syscall uart_serv			; display AH
+0068   0066 24          	mov ah, bl				; retrieve AL
+0069   0067 19 01       	mov al, 1
+0070   0069 05 02       	syscall uart_serv			; display AL
+0071   006B 10 01 20    	mov a, $2001
+0072   006E 05 02       	syscall uart_serv			; space
+0073   0070             
+0074   0070 79          	inc d
+0075   0071 78          	inc c
+0076   0072 C2 00 02    	cmp c, 512
+0077   0075 C7 56 00    	jne dump_loop
+0078   0078 07 A8 00    	call put_nl
+0079   007B 09          	ret
+0080   007C             print_base:
+0081   007C 07 A8 00    	call put_nl
+0082   007F 2D          	mov b, d
+0083   0080 05 04       	syscall xput_u16				; display row
+0084   0082 10 01 3A    	mov a, $3A01
+0085   0085 05 02       	syscall uart_serv
+0086   0087 10 01 20    	mov a, $2001
+0087   008A 05 02       	syscall uart_serv
+0088   008C 0A 5C 00    	jmp back
+0089   008F             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0090   008F             ;; INPUT A STRING
+0091   008F             ;; terminates with null
+0092   008F             ;; pointer in D
+0093   008F             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0094   008F             gets:
+0095   008F E1          	pushf
+0096   0090 D7          	push a
+0097   0091 DA          	push d
+0098   0092             gets_loop:
+0099   0092 19 03       	mov al, 3
+0100   0094 05 02       	syscall uart_serv			; receive in AH
+0101   0096 76 0D       	cmp ah, 0Dh				; cr
+0102   0098 C6 A1 00    	je gets_end
+0103   009B 1A          	mov al, ah
+0104   009C 3E          	mov [d], al
+0105   009D 79          	inc d
+0106   009E 0A 92 00    	jmp gets_loop
+0107   00A1             gets_end:
+0108   00A1 19 00       	mov al, 0
+0109   00A3 3E          	mov [d], al				; terminate string
+0110   00A4 E7          	pop d
+0111   00A5 E4          	pop a
+0112   00A6 EE          	popf
+0113   00A7 09          	ret
+0114   00A8             
+0115   00A8             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0116   00A8             ; PRINT NEW LINE
+0117   00A8             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0118   00A8             put_nl:
+0119   00A8 E1          	pushf
+0120   00A9 D7          	push a
+0121   00AA 10 01 0A    	mov a, $0A01
+0122   00AD 05 02       	syscall uart_serv
+0123   00AF 10 01 0D    	mov a, $0D01
+0124   00B2 05 02       	syscall uart_serv
+0125   00B4 E4          	pop a
+0126   00B5 EE          	popf
+0127   00B6 09          	ret
+0128   00B7             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0129   00B7             ; CONVERT ASCII 'O'..'F' TO INTEGER 0..15
+0130   00B7             ; ASCII in BL
+0131   00B7             ; result in AL
+0132   00B7             ; ascii for F = 0100 0110
+0133   00B7             ; ascii for 9 = 0011 1001
+0134   00B7             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0135   00B7             hex_ascii_encode:
+0136   00B7 1B          	mov al, bl
+0137   00B8 93 40       	test al, 40h				; test if letter or number
+0138   00BA C7 C0 00    	jnz hex_letter
+0139   00BD 87 0F       	and al, 0Fh				; get number
+0140   00BF 09          	ret
+0141   00C0             hex_letter:
+0142   00C0 87 0F       	and al, 0Fh				; get letter
+0143   00C2 6A 09       	add al, 9
+0144   00C4 09          	ret
+0145   00C5             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0146   00C5             ; ATOI
+0147   00C5             ; 2 letter hex string in B
+0148   00C5             ; 8bit integer returned in AL
+0149   00C5             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0150   00C5             atoi:
+0151   00C5 E1          	pushf
+0152   00C6 D8          	push b
+0153   00C7             	
+0154   00C7 07 B7 00    	call hex_ascii_encode			; convert BL to 4bit code in AL
+0155   00CA 30          	mov bl, bh
+0156   00CB DB          	push al					; save a
+0157   00CC 07 B7 00    	call hex_ascii_encode
+0158   00CF EA          	pop bl	
+0159   00D0 FD 9E 04    	shl al, 4
+0160   00D3 8C          	or al, bl
+0161   00D4             	
+0162   00D4 E5          	pop b
+0163   00D5 EE          	popf
+0164   00D6 09          	ret	
+0165   00D7             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0166   00D7             ; ITOA
+0167   00D7             ; 8bit value in BL
+0168   00D7             ; 2 byte ASCII result in A
+0169   00D7             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0170   00D7             itoa:
+0171   00D7 E1          	pushf
+0172   00D8 DA          	push d
+0173   00D9 DE          	push	bh
+0174   00DA DD          	push bl
+0175   00DB             
+0176   00DB A7 00       	mov bh, 0
+0177   00DD             	
+0178   00DD FD 87 0F    	and 	bl, $0F
+0179   00E0 3B 4B 01    	mov 	d, s_hex_digits
+0180   00E3 5A          	add 	d, b
+0181   00E4 1E          	mov 	al, [d]				; get ASCII
+0182   00E5 EA          	pop 	bl
+0183   00E6 52 01 00    	sub sp, 1				; push bl back
+0184   00E9 DB          	push al
+0185   00EA             	
+0186   00EA FD 87 F0    	and 	bl, $F0
+0187   00ED FD A4 04    	shr 	bl, 4
+0188   00F0 3B 4B 01    	mov 	d, s_hex_digits
+0189   00F3 5A          	add 	d, b
+0190   00F4 1E          	mov 	al, [d]				; get ASCII
+0191   00F5             
+0192   00F5 23          	mov ah, al
+0193   00F6 E8          	pop 	al	
+0194   00F7             	
+0195   00F7 EA          	pop 	bl
+0196   00F8 EB          	pop bh
+0197   00F9 E7          	pop 	d
+0198   00FA EE          	popf
+0199   00FB 09          	ret
+0200   00FC             
+0201   00FC             
+0202   00FC             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0203   00FC             ; TO LOWER
+0204   00FC             ; input in AH
+0205   00FC             ; output in AH
+0206   00FC             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0207   00FC             to_lower:
+0208   00FC E1          	pushf
+0209   00FD B9 5A       	cmp al, 'Z'
+0210   00FF D1 04 01    	jgu to_lower_ret
+0211   0102 6A 20       	add al, 20h				; convert to lower case
+0212   0104             to_lower_ret:
+0213   0104 EE          	popf
+0214   0105 09          	ret
+0215   0106             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0216   0106             ; TO UPPER
+0217   0106             ; input in AH
+0218   0106             ; output in AH
+0219   0106             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0220   0106             to_upper:
+0221   0106 E1          	pushf
+0222   0107 B9 61       	cmp al, 'a'
+0223   0109 C8 0E 01    	jlu to_upper_ret
+0224   010C 6F 20       	sub al, 20h				; convert to upper case
+0225   010E             to_upper_ret:
+0226   010E EE          	popf
+0227   010F 09          	ret
+0228   0110             
+0229   0110             	
+0230   0110             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0231   0110             ; PRINT NULL TERMINATED STRING
+0232   0110             ; pointer in D
+0233   0110             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0234   0110             puts:
+0235   0110 E1          	pushf
+0236   0111 D7          	push a
+0237   0112 DA          	push d
+0238   0113             puts_L1:
+0239   0113 1E          	mov al, [d]
+0240   0114 B9 00       	cmp al, 0
+0241   0116 C6 22 01    	jz puts_END
+0242   0119 23          	mov ah, al
+0243   011A 19 01       	mov al, 1
+0244   011C 05 02       	syscall uart_serv
+0245   011E 79          	inc d	
+0246   011F 0A 13 01    	jmp puts_L1
+0247   0122             puts_END:
+0248   0122 E7          	pop d
+0249   0123 E4          	pop a
+0250   0124 EE          	popf
+0251   0125 09          	ret
+0252   0126             	
+0253   0126             
+0254   0126             				
+0255   0126 30 2E 20 53 s_main_menu:		.db "0. Swap process\n\r"
+0255   012A 77 61 70 20 
+0255   012E 70 72 6F 63 
+0255   0132 65 73 73 0A 
+0255   0136 0D 
+0256   0137 31 2E 20 45 				.db "1. Examine memory\n\r", 0
+0256   013B 78 61 6D 69 
+0256   013F 6E 65 20 6D 
+0256   0143 65 6D 6F 72 
+0256   0147 79 0A 0D 00 
+0257   014B             				
+0258   014B             				
+0259   014B 30 31 32 33 s_hex_digits:		.db "0123456789ABCDEF"	
+0259   014F 34 35 36 37 
+0259   0153 38 39 41 42 
+0259   0157 43 44 45 46 
+0260   015B             
+0261   015B             
+0262   015B 54 68 69 73 s_help:			.db "This is Process 2.\n\r", 0
+0262   015F 20 69 73 20 
+0262   0163 50 72 6F 63 
+0262   0167 65 73 73 20 
+0262   016B 32 2E 0A 0D 
+0262   016F 00 
+0263   0170             
+0264   0170 0A          s_nl_2:			.db 0Ah
+0265   0171 0A 0D 00    s_nl_1:			.db 0Ah, 0Dh, 0
+0266   0174             
+0267   0174 52 65 74 75 s_ret: 			.db "Returned to Process 2.\n\r", 0
+0267   0178 72 6E 65 64 
+0267   017C 20 74 6F 20 
+0267   0180 50 72 6F 63 
+0267   0184 65 73 73 20 
+0267   0188 32 2E 0A 0D 
+0267   018C 00 
+0268   018D             
+0269   018D 50 72 6F 67 s_enter_prog:		.db "Program: ", 0
+0269   0191 72 61 6D 3A 
+0269   0195 20 00 
+0270   0197 4F 72 69 67 s_origin_addr:	.db "Origin address: ", 0
+0270   019B 69 6E 20 61 
+0270   019F 64 64 72 65 
+0270   01A3 73 73 3A 20 
+0270   01A7 00 
+0271   01A8             
+0272   01A8             
+0273   01A8             
+0274   01A8             
+0275   01A8             .endtasm: Number of errors = 0

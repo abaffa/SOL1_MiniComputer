@@ -1,0 +1,1028 @@
+0001   0000             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0002   0000             ; 74 SERIES MINICOMPUTER BIOS VERSION 1.0
+0003   0000             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0004   0000             
+0005   0000             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0006   0000             ; MEMORY MAP
+0007   0000             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0008   0000             ; 0000		ROM BEGIN
+0009   0000             ; ....
+0010   0000             ; 7FFF		ROM END
+0011   0000             ;
+0012   0000             ; 8000		RAM begin
+0013   0000             ; ....
+0014   0000             ; F7FF		Stack root
+0015   0000             
+0016   0000             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0017   0000             ; I/O MAP
+0018   0000             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0019   0000             ; FF80		UART 0		(16550)
+0020   0000             ; FF90		UART 1		(16550)
+0021   0000             ; FFA0		RTC			(M48T02)
+0022   0000             ; FFB0		PIO 0		(8255)
+0023   0000             ; FFC0		PIO 1		(8255)
+0024   0000             ; FFD0		IDE			(Compact Flash / PATA)
+0025   0000             ; FFE0		Timer		(8253)
+0026   0000             ; FFF0		BIOS CONFIGURATION NV-RAM STORE AREA
+0027   0000             
+0028   0000             
+0029   0000             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0030   0000             ; SYSTEM CONSTANTS / EQUATIONS
+0031   0000             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0032   0000             _UART0_DATA				.equ $FF80				; data
+0033   0000             _UART0_DLAB_0				.equ $FF80				; divisor latch low byte
+0034   0000             _UART0_DLAB_1				.equ $FF81				; divisor latch high byte
+0035   0000             _UART0_IER				.equ $FF81				; Interrupt enable register
+0036   0000             _UART0_FCR				.equ $FF82				; FIFO control register
+0037   0000             _UART0_LCR				.equ $FF83				; line control register
+0038   0000             _UART0_LSR				.equ $FF85				; line status register
+0039   0000             
+0040   0000             _IDE_BASE				.equ $FFD0				; IDE BASE
+0041   0000             _IDE_R0					.equ _IDE_BASE + 0		; DATA PORT
+0042   0000             _IDE_R1					.equ _IDE_BASE + 1		; READ: ERROR CODE, WRITE: FEATURE
+0043   0000             _IDE_R2					.equ _IDE_BASE + 2		; NUMBER OF SECTORS TO TRANSFER
+0044   0000             _IDE_R3					.equ _IDE_BASE + 3		; SECTOR ADDRESS LBA 0 [0:7]
+0045   0000             _IDE_R4					.equ _IDE_BASE + 4		; SECTOR ADDRESS LBA 1 [8:15]
+0046   0000             _IDE_R5					.equ _IDE_BASE + 5		; SECTOR ADDRESS LBA 2 [16:23]
+0047   0000             _IDE_R6					.equ _IDE_BASE + 6		; SECTOR ADDRESS LBA 3 [24:27 (LSB)]
+0048   0000             _IDE_R7					.equ _IDE_BASE + 7		; READ: STATUS, WRITE: COMMAND
+0049   0000             
+0050   0000             _7SEG_DISPLAY				.equ $FFB0				; BIOS POST CODE HEX DISPLAY (2 DIGITS)
+0051   0000             _BIOS_POST_CTRL			.equ $FFB3				; BIOS POST DISPLAY CONTROL REGISTER, 80h = As Output
+0052   0000             _PIO_A					.equ $FFB0		
+0053   0000             _PIO_B					.equ $FFB1
+0054   0000             _PIO_C					.equ $FFB2
+0055   0000             _PIO_CONTROL				.equ $FFB3				; PIO CONTROL PORT
+0056   0000             
+0057   0000             _TIMER_C_0				.equ $FFE0				; TIMER COUNTER 0
+0058   0000             _TIMER_C_1				.equ $FFE1				; TIMER COUNTER 1
+0059   0000             _TIMER_C_2				.equ $FFE2				; TIMER COUNTER 2
+0060   0000             _TIMER_CTRL				.equ $FFE3				; TIMER CONTROL REGISTER
+0061   0000             
+0062   0000             _STACK_BEGIN				.equ $F7FF				; beginning of stack
+0063   0000             _GLOBAL_BASE				.equ $8000				; base of global variable block
+0064   0000             
+0065   0000             _IDE_BUFFER				.equ $9000
+0066   0000             index: 					.equ _GLOBAL_BASE
+0067   0000             buffer_addr:				.equ _GLOBAL_BASE + 2
+0068   0000             
+0069   0000             _NULL					.equ 0
+0070   0000             
+0071   0000             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0072   0000             ; GLOBAL SYSTEM VARIABLES
+0073   0000             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0074   0000             
+0075   0000             
+0076   0000             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0077   0000             ; EXTERNAL INTERRUPT TABLE
+0078   0000             ; highest priority at lowest address
+0079   0000             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0080   0000 34 00       .dw INT_0
+0081   0002 35 00       .dw INT_1
+0082   0004 36 00       .dw INT_2
+0083   0006 37 00       .dw INT_3
+0084   0008 38 00       .dw INT_4
+0085   000A 39 00       .dw INT_5
+0086   000C 3A 00       .dw INT_6
+0087   000E 3B 00       .dw INT_7
+0088   0010             
+0089   0010             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0090   0010             ; RESET VECTOR DECLARATION
+0091   0010             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0092   0010 E2 01       .dw RESET_VECTOR
+0093   0012             
+0094   0012             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0095   0012             ;; EXCEPTION VECTOR TABLE
+0096   0012             ;; total of 7 entries, starting at address $0012
+0097   0012             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0098   0012 3C 00       .dw TRAP_PRIVILEGE	
+0099   0014 52 00       .dw TRAP_DIV_ZERO	
+0100   0016 5F 00       .dw UNDEFINED_OPCODE
+0101   0018 00 00       .dw _NULL
+0102   001A 00 00       .dw _NULL
+0103   001C 00 00       .dw _NULL
+0104   001E 00 00       .dw _NULL
+0105   0020             
+0106   0020             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0107   0020             ;; SYSTEM CALL VECTOR TABLE
+0108   0020             ;; starts at address $0020
+0109   0020             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0110   0020 45 00       .dw TRAP_BREAKPOINT
+0111   0022 60 00       .dw RTC_SERVICES				
+0112   0024 8E 00       .dw UART_SERVICES				
+0113   0026 EC 00       .dw IDE_SERVICES	
+0114   0028 00 00       .dw _NULL
+0115   002A 00 00       .dw _NULL
+0116   002C 00 00       .dw _NULL
+0117   002E 00 00       .dw _NULL
+0118   0030 00 00       .dw _NULL
+0119   0032 00 00       .dw _NULL	
+0120   0034             
+0121   0034             bios_bkpt	.equ 0
+0122   0034             bios_rtc		.equ 1
+0123   0034             bios_uart	.equ 2
+0124   0034             bios_ide		.equ 3
+0125   0034             
+0126   0034             
+0127   0034             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0128   0034             ; EXTERNAL INTERRUPTS' CODE BLOCK
+0129   0034             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0130   0034             INT_0:
+0131   0034 06          	sysret
+0132   0035             INT_1:
+0133   0035 06          	sysret
+0134   0036             INT_2:
+0135   0036 06          	sysret
+0136   0037             INT_3:
+0137   0037 06          	sysret
+0138   0038             INT_4:
+0139   0038 06          	sysret
+0140   0039             INT_5:
+0141   0039 06          	sysret
+0142   003A             INT_6:	
+0143   003A 06          	sysret
+0144   003B             INT_7:
+0145   003B 06          	sysret
+0146   003C             
+0147   003C             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0148   003C             ; EXCEPTIONS
+0149   003C             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0150   003C             
+0151   003C             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0152   003C             ; PRIVILEGE EXCEPTION
+0153   003C             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0154   003C             TRAP_PRIVILEGE:
+0155   003C DA          	push d
+0156   003D             
+0157   003D 3B 02 05    	mov d, s_priv1
+0158   0040 07 C8 02    	call puts
+0159   0043             
+0160   0043 E7          	pop d
+0161   0044             							; enable interrupts
+0162   0044 06          	sysret
+0163   0045             
+0164   0045             
+0165   0045             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0166   0045             ; BREAKPOINT EXCEPTION
+0167   0045             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0168   0045             TRAP_BREAKPOINT:
+0169   0045 D7          	push a
+0170   0046 DA          	push d
+0171   0047 E1          	pushf
+0172   0048             	
+0173   0048 3B EA 04    	mov d, s_bkpt
+0174   004B 07 C8 02    	call puts
+0175   004E             	
+0176   004E EE          	popf
+0177   004F E7          	pop d
+0178   0050 E4          	pop a
+0179   0051             							; enable interrupts
+0180   0051 06          	sysret
+0181   0052             
+0182   0052             
+0183   0052             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0184   0052             ; DIVIDE BY ZERO EXCEPTION
+0185   0052             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0186   0052             TRAP_DIV_ZERO:
+0187   0052 D7          	push a
+0188   0053 DA          	push d
+0189   0054 E1          	pushf
+0190   0055             	
+0191   0055 3B 4A 05    	mov d, s_divzero
+0192   0058 07 C8 02    	call puts
+0193   005B             	
+0194   005B EE          	popf
+0195   005C E7          	pop d
+0196   005D E4          	pop a
+0197   005E             							; enable interrupts
+0198   005E 06          	sysret
+0199   005F             
+0200   005F             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0201   005F             ; UNDEFINED OPCODE EXCEPTION
+0202   005F             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0203   005F             UNDEFINED_OPCODE:
+0204   005F 06          	sysret
+0205   0060             	
+0206   0060             
+0207   0060             	
+0208   0060             
+0209   0060             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0210   0060             ; RTC SERVICES INTERRUPT
+0211   0060             ; RTC I/O bank = FFA0 to FFAF
+0212   0060             ; FFA0 to FFA7 is scratch RAM
+0213   0060             ; control register at $FFA8 [ W | R | S | Cal4..Cal0 ]
+0214   0060             ; al = 0..6 -> get
+0215   0060             ; al = 7..D -> set
+0216   0060             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0217   0060             RTC_SERVICES:
+0218   0060 DB          	push al
+0219   0061 DA          	push d
+0220   0062 B9 06       	cmp al, 6
+0221   0064 D1 79 00    	jgu RTC_SET
+0222   0067             RTC_GET:
+0223   0067 6A A9       	add al, $A9			; generate RTC address to get to address A9 of clock
+0224   0069 22 FF       	mov ah, $FF		
+0225   006B 3C          	mov d, a				; get to FFA9 + offset
+0226   006C F2 A8 FF 40 	mov byte[$FFA8], $40		; set R bit to 1
+0227   0070 1E          	mov al, [d]			; get data
+0228   0071 F2 A8 FF 00 	mov byte[$FFA8], 0		; reset R bit
+0229   0075 23          	mov ah, al
+0230   0076 E7          	pop d
+0231   0077 E8          	pop al
+0232   0078 06          	sysret
+0233   0079             RTC_SET:
+0234   0079 DD          	push bl
+0235   007A 99          	mov bl, ah		; set data asIDE
+0236   007B 6A A2       	add al, $A2		; generate RTC address to get to address A9 of clock
+0237   007D 22 FF       	mov ah, $FF		
+0238   007F 3C          	mov d, a		; get to FFA9 + offset
+0239   0080 1B          	mov al, bl		; get data back
+0240   0081 F2 A8 FF 80 	mov byte[$FFA8], $80	; set W bit to 1
+0241   0085 3E          	mov [d], al		; set data
+0242   0086 F2 A8 FF 00 	mov byte[$FFA8], 0		; reset write bit
+0243   008A EA          	pop bl
+0244   008B E7          	pop d
+0245   008C E8          	pop al
+0246   008D 06          	sysret
+0247   008E             
+0248   008E             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0249   008E             ; INT 4
+0250   008E             ; UART SERVICES INTERRUPT
+0251   008E             ; al = option
+0252   008E             ; ah = data
+0253   008E             ; 0 = init, 1 = send, 2 = receive, 3 = receive with echo
+0254   008E             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0255   008E             UART_SERVICES:
+0256   008E B9 00       	cmp al, 0
+0257   0090 C6 A0 00    	jz UART_INIT
+0258   0093 80          	dec al
+0259   0094 C6 B9 00    	jz UART_SEND
+0260   0097 80          	dec al
+0261   0098 C6 C6 00    	jz UART_RECEIVE
+0262   009B 80          	dec al
+0263   009C C6 D3 00    	jz UART_RECEIVE_E
+0264   009F             UART_STATUS:
+0265   009F 06          	sysret
+0266   00A0             UART_INIT:
+0267   00A0 F2 83 FF 83 	mov byte[_UART0_LCR], 83h			; 8 data, 1 stop, no parity	, divisor latch = 1, UART address 3 = Line Control Register
+0268   00A4 F2 80 FF 03 	mov byte[_UART0_DLAB_0], 3			; baud = 38400, divisor latch low byte = 3
+0269   00A8 F2 81 FF 00 	mov byte[_UART0_DLAB_1], 0			; divisor latch high byte = 0			
+0270   00AC F2 83 FF 03 	mov byte[_UART0_LCR], 3			; divisor latch = 0, UART address 3 = Line Control Register
+0271   00B0 F2 81 FF 00 	mov byte[_UART0_IER], 0			; disable all UART interrupts
+0272   00B4 F2 82 FF 00 	mov byte[_UART0_FCR], 0			; disable FIFO
+0273   00B8 06          	sysret
+0274   00B9             UART_SEND:
+0275   00B9 1D 85 FF    	mov al, [_UART0_LSR]			; read Line Status Register
+0276   00BC 93 20       	test al, 20h					; isolate Transmitter Empty
+0277   00BE C6 B9 00    	jz UART_SEND		
+0278   00C1 1A          	mov al, ah
+0279   00C2 3D 80 FF    	mov [_UART0_DATA], al			; write char to Transmitter Holding Register
+0280   00C5 06          	sysret
+0281   00C6             UART_RECEIVE:
+0282   00C6 1D 85 FF    	mov al, [_UART0_LSR]			; read Line Status Register
+0283   00C9 93 01       	test al, 1					; isolate Data Ready
+0284   00CB C6 C6 00    	jz UART_RECEIVE
+0285   00CE 1D 80 FF    	mov al, [_UART0_DATA]			; get character
+0286   00D1 23          	mov ah, al
+0287   00D2 06          	sysret
+0288   00D3             UART_RECEIVE_E:
+0289   00D3 1D 85 FF    	mov al, [_UART0_LSR]			; read Line Status Register
+0290   00D6 93 01       	test al, 1					; isolate Data Ready
+0291   00D8 C6 D3 00    	jz UART_RECEIVE_E
+0292   00DB 1D 80 FF    	mov al, [_UART0_DATA]			; get character
+0293   00DE 23          	mov ah, al
+0294   00DF             UART_RECEIVE_E_LOOP:
+0295   00DF 1D 85 FF    	mov al, [_UART0_LSR]			; read Line Status Register
+0296   00E2 93 20       	test al, 20h					; isolate Transmitter Empty
+0297   00E4 C6 DF 00    	jz UART_RECEIVE_E_LOOP
+0298   00E7 1A          	mov al, ah
+0299   00E8 3D 80 FF    	mov [_UART0_DATA], al			; write char to Transmitter Holding Register
+0300   00EB 06          	sysret
+0301   00EC             	
+0302   00EC             
+0303   00EC             
+0304   00EC             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0305   00EC             ; IDE SERVICES INTERRUPT
+0306   00EC             ; al = option
+0307   00EC             ; 0 = ide reset, 1 = ide sleep, 2 = read sector, 3 = write sector
+0308   00EC             ; IDE read/write sector
+0309   00EC             ; 512 bytes
+0310   00EC             ; user buffer pointer in D
+0311   00EC             ; kernel buffer pointer = _IDE_BUFFER
+0312   00EC             ; AH = number of sectors
+0313   00EC             ; CB = LBA bytes 3..0
+0314   00EC             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0315   00EC             IDE_SERVICES:
+0316   00EC E1          	pushf
+0317   00ED B9 00       	cmp al, 0
+0318   00EF C6 00 01    	je IDE_RESET
+0319   00F2 80          	dec al
+0320   00F3 C6 1A 01    	jz IDE_SLEEP
+0321   00F6 80          	dec al
+0322   00F7 C6 2D 01    	jz IDE_READ_SECT
+0323   00FA 80          	dec al
+0324   00FB C6 53 01    	jz IDE_WRITE_SECT
+0325   00FE             IDE_RET:
+0326   00FE EE          	popf
+0327   00FF 06          	sysret
+0328   0100             IDE_RESET:
+0329   0100 19 04       	mov al, 04h				; RESET IDE
+0330   0102 3D D7 FF    	mov [_IDE_R7], al
+0331   0105 07 A9 01    	call IDE_wait				; wait for IDE ready			 
+0332   0108 19 E0       	mov al, 0E0h				; LBA3= 0, MASTER, MODE= LBA
+0333   010A 3D D6 FF    	mov [_IDE_R6], al
+0334   010D 19 01       	mov al, 01h				; 8-BIT TRANSFERS
+0335   010F 3D D1 FF    	mov [_IDE_R1], al
+0336   0112 19 EF       	mov al, 0EFh				; SET FEATURE COMMAND
+0337   0114 3D D7 FF    	mov [_IDE_R7], al
+0338   0117 0A FE 00    	jmp IDE_RET
+0339   011A             IDE_SLEEP:
+0340   011A 07 A9 01    	call IDE_wait				; wait for IDE ready			 
+0341   011D 19 40       	mov al, %01000000			; lba[3:0](reserved), bit 6=1
+0342   011F 3D D6 FF    	mov [_IDE_R6], al
+0343   0122 19 E6       	mov al, 0E6h				; sleep command
+0344   0124 3D D7 FF    	mov [_IDE_R7], al
+0345   0127 07 A9 01    	call IDE_wait				; wait for IDE ready
+0346   012A 0A FE 00    	jmp IDE_RET
+0347   012D             IDE_READ_SECT:
+0348   012D 1A          	mov al, ah
+0349   012E 3D D2 FF    	mov [_IDE_R2], al			; number of sectors (0..255)
+0350   0131 1B          	mov al, bl
+0351   0132 3D D3 FF    	mov [_IDE_R3], al
+0352   0135 1C          	mov al, bh
+0353   0136 3D D4 FF    	mov [_IDE_R4], al
+0354   0139 12          	mov a, c
+0355   013A 3D D5 FF    	mov [_IDE_R5], al
+0356   013D 1A          	mov al, ah
+0357   013E 87 0F       	and al, %00001111
+0358   0140 8B E0       	or al, %11100000			; mode lba, master
+0359   0142 3D D6 FF    	mov [_IDE_R6], al
+0360   0145 07 A9 01    	call IDE_wait
+0361   0148 19 20       	mov al, 20h
+0362   014A 3D D7 FF    	mov [_IDE_R7], al			; read sector cmd
+0363   014D             
+0364   014D 07 79 01    	call IDE_read	
+0365   0150 0A FE 00    	jmp IDE_RET
+0366   0153             
+0367   0153             IDE_WRITE_SECT:
+0368   0153 1A          	mov al, ah
+0369   0154 3D D2 FF    	mov [_IDE_R2], al			; number of sectors (0..255)
+0370   0157 1B          	mov al, bl
+0371   0158 3D D3 FF    	mov [_IDE_R3], al
+0372   015B 1C          	mov al, bh
+0373   015C 3D D4 FF    	mov [_IDE_R4], al
+0374   015F 12          	mov a, c
+0375   0160 3D D5 FF    	mov [_IDE_R5], al
+0376   0163 1A          	mov al, ah
+0377   0164 87 0F       	and al, %00001111
+0378   0166 8B E0       	or al, %11100000			; mode lba, master
+0379   0168 3D D6 FF    	mov [_IDE_R6], al
+0380   016B 07 A9 01    	call IDE_wait
+0381   016E 19 30       	mov al, 30h
+0382   0170 3D D7 FF    	mov [_IDE_R7], al			; write sector cmd
+0383   0173             	
+0384   0173 07 91 01    	call IDE_write			
+0385   0176 0A FE 00    	jmp IDE_RET
+0386   0179             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0387   0179             ; READ IDE DATA
+0388   0179             ; pointer in D
+0389   0179             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0390   0179             IDE_read:
+0391   0179 DB          	push al
+0392   017A DA          	push d
+0393   017B             IDE_read_loop:
+0394   017B 07 A9 01    	call IDE_wait
+0395   017E 1D D7 FF    	mov al, [_IDE_R7]
+0396   0181 87 08       	and al, %00001000			; DRQ FLAG
+0397   0183 C6 8E 01    	jz IDE_read_end
+0398   0186 1D D0 FF    	mov al, [_IDE_R0]
+0399   0189 3E          	mov [d], al
+0400   018A 79          	inc d
+0401   018B 0A 7B 01    	jmp IDE_read_loop
+0402   018E             IDE_read_end:
+0403   018E E7          	pop d
+0404   018F E8          	pop al
+0405   0190 09          	ret
+0406   0191             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0407   0191             ; WRITE IDE DATA
+0408   0191             ; data pointer in D
+0409   0191             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0410   0191             IDE_write:
+0411   0191 DB          	push al
+0412   0192 DA          	push d
+0413   0193             IDE_write_loop:
+0414   0193 07 A9 01    	call IDE_wait
+0415   0196 1D D7 FF    	mov al, [_IDE_R7]
+0416   0199 87 08       	and al, %00001000			; DRQ FLAG
+0417   019B C6 A6 01    	jz IDE_write_end
+0418   019E 1E          	mov al, [d]
+0419   019F 3D D0 FF    	mov [_IDE_R0], al
+0420   01A2 79          	inc d 
+0421   01A3 0A 93 01    	jmp IDE_write_loop
+0422   01A6             IDE_write_end:
+0423   01A6 E7          	pop d
+0424   01A7 E8          	pop al
+0425   01A8 09          	ret
+0426   01A9             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0427   01A9             ; wait for IDE to be ready
+0428   01A9             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0429   01A9             IDE_wait:
+0430   01A9 1D D7 FF    	mov al, [_IDE_R7]	
+0431   01AC 87 80       	and al, 80h				; BUSY FLAG
+0432   01AE C7 A9 01    	jnz IDE_wait
+0433   01B1 09          	ret
+0434   01B2             
+0435   01B2             	
+0436   01B2             	
+0437   01B2             ; ************************************************************
+0438   01B2             ; GET HEX FILE
+0439   01B2             ; di = destination address
+0440   01B2             ; return length in bytes in C
+0441   01B2             ; ************************************************************
+0442   01B2             _load_hex:
+0443   01B2 D2          	push bp
+0444   01B3 9B          	mov bp, sp
+0445   01B4 D7          	push a
+0446   01B5 D8          	push b
+0447   01B6 DA          	push d
+0448   01B7 E2          	push si
+0449   01B8 E3          	push di
+0450   01B9 52 00 60    	sub sp, $6000				; string data block
+0451   01BC 38 00 00    	mov c, 0
+0452   01BF             	
+0453   01BF 48          	mov a, sp
+0454   01C0 77          	inc a
+0455   01C1 3C          	mov d, a				; start of string data block
+0456   01C2 07 E5 02    	call getse				; get program string
+0457   01C5 4D          	mov si, a
+0458   01C6             
+0459   01C6             __load_hex_loop:
+0460   01C6 F6          	lodsb					; load from [SI] to AL
+0461   01C7 B9 00       	cmp al, 0				; check if ASCII 0
+0462   01C9 C6 D7 01    	jz __load_hex_ret
+0463   01CC 36          	mov bh, al
+0464   01CD F6          	lodsb
+0465   01CE 2F          	mov bl, al
+0466   01CF 07 4E 03    	call atoi				; convert ASCII byte in B to int (to AL)
+0467   01D2 F7          	stosb					; store AL to [DI]
+0468   01D3 78          	inc c
+0469   01D4 0A C6 01    	jmp __load_hex_loop
+0470   01D7             __load_hex_ret:
+0471   01D7 51 00 60    	add sp, $6000	
+0472   01DA F0          	pop di
+0473   01DB EF          	pop si
+0474   01DC E7          	pop d
+0475   01DD E5          	pop b
+0476   01DE E4          	pop a
+0477   01DF 9C          	mov sp, bp
+0478   01E0 F1          	pop bp
+0479   01E1 09          	ret
+0480   01E2             	
+0481   01E2             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0482   01E2             ; BIOS ENTRY POINT
+0483   01E2             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0484   01E2             RESET_VECTOR:
+0485   01E2 19 20       	mov al, %00100000				; interrupts = OFF, mode = SUP, paging = OFF, halt = OFF, display_load = ON
+0486   01E4 0D          	stostat
+0487   01E5 10 FF F7    	mov a, _STACK_BEGIN
+0488   01E8 47          	mov sp, a
+0489   01E9 49          	mov bp, a			; setup stack and frame
+0490   01EA             
+0491   01EA 19 00       	mov al, 0
+0492   01EC 05 02       	syscall bios_uart
+0493   01EE             	
+0494   01EE 3B 8F 04    	mov d, s_bios3
+0495   01F1 07 C8 02    	call puts
+0496   01F4             	
+0497   01F4 19 00       	mov al, 0						; reset ide
+0498   01F6 05 03       	syscall bios_ide	
+0499   01F8             	
+0500   01F8             
+0501   01F8             cmd_fwrite:
+0502   01F8             ;boot sector
+0503   01F8 3B 60 02    	mov d, s_dataentry
+0504   01FB 07 C8 02    	call puts
+0505   01FE FD 4F 00 90 	mov di, _IDE_BUFFER	; pointer to file contents
+0506   0202 07 B2 01    	call _load_hex			; load binary hex
+0507   0205 26 00 00    	mov b, 0
+0508   0208 38 01 00    	mov c, 1	
+0509   020B 10 03 01    	mov a, $0103				; disk write, 1 sector
+0510   020E 3B 00 90    	mov d, _IDE_BUFFER
+0511   0211 05 03       	syscall bios_ide			; write sector
+0512   0213             	
+0513   0213             ; kernel
+0514   0213 3B 60 02    	mov d, s_dataentry
+0515   0216 07 C8 02    	call puts
+0516   0219 FD 4F 00 90 	mov di, _IDE_BUFFER	; pointer to file contents
+0517   021D 07 B2 01    	call _load_hex			; load binary hex
+0518   0220 10 00 00    	mov a, 0
+0519   0223 42 00 80    	mov [index], a
+0520   0226 3B 00 90    	mov d, _IDE_BUFFER
+0521   0229 13          	mov a, d
+0522   022A 42 02 80    	mov [buffer_addr], a
+0523   022D 26 01 00    	mov b, 1
+0524   0230 38 01 00    	mov c, 1
+0525   0233             cmd_fwrite_L1:	
+0526   0233 10 03 01    	mov a, $0103				; disk write, 1 sector
+0527   0236 05 03       	syscall bios_ide			; write sector
+0528   0238 14 00 80    	mov a, [index]
+0529   023B 77          	inc a
+0530   023C 42 00 80    	mov [index], a
+0531   023F AF 20 00    	cmp a, 32		
+0532   0242 C6 54 02    	je cmd_fwrite_end
+0533   0245 FD 77       	inc b
+0534   0247 14 02 80    	mov a, [buffer_addr]
+0535   024A 53 00 02    	add a, 512
+0536   024D 42 02 80    	mov [buffer_addr], a
+0537   0250 3C          	mov d, a
+0538   0251 0A 33 02    	jmp cmd_fwrite_L1
+0539   0254             cmd_fwrite_end:
+0540   0254 07 2A 03    	call put_nl
+0541   0257 3B 64 02    	mov d, s_done
+0542   025A 07 C8 02    	call puts
+0543   025D             	
+0544   025D 0A 5D 02    sss: jmp sss	
+0545   0260             	
+0546   0260 3E 3E 20 00 s_dataentry: .db ">> ", 0	
+0547   0264 0A 44 6F 6E s_done: .db "\nDone!\n", 0
+0547   0268 65 21 0A 00 
+0548   026C             
+0549   026C             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0550   026C             ; PRINT 16BIT HEX INTEGER
+0551   026C             ; integer value in reg B
+0552   026C             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0553   026C             PRINT_U16X:
+0554   026C E1          	pushf
+0555   026D D7          	push a
+0556   026E D8          	push b
+0557   026F DD          	push bl
+0558   0270 30          	mov bl, bh
+0559   0271 07 60 03    	call itoa				; convert bh to char in A
+0560   0274 2F          	mov bl, al				; save al	
+0561   0275 19 01       	mov al, 1
+0562   0277 05 02       	syscall bios_uart				; display AH
+0563   0279 24          	mov ah, bl				; retrieve al
+0564   027A 19 01       	mov al, 1
+0565   027C 05 02       	syscall bios_uart				; display AL
+0566   027E             
+0567   027E EA          	pop bl
+0568   027F 07 60 03    	call itoa				; convert bh to char in A
+0569   0282 2F          	mov bl, al				; save al
+0570   0283 19 01       	mov al, 1
+0571   0285 05 02       	syscall bios_uart				; display AH
+0572   0287 24          	mov ah, bl				; retrieve al
+0573   0288 19 01       	mov al, 1
+0574   028A 05 02       	syscall bios_uart				; display AL
+0575   028C             
+0576   028C E5          	pop b
+0577   028D E4          	pop a
+0578   028E EE          	popf
+0579   028F 09          	ret
+0580   0290             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0581   0290             ; INPUT 16BIT HEX INTEGER
+0582   0290             ; read 16bit integer into A
+0583   0290             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0584   0290             SCAN_U16X:
+0585   0290 F8 10 00    	enter 16
+0586   0293 E1          	pushf
+0587   0294 D8          	push b
+0588   0295 DA          	push d
+0589   0296             
+0590   0296 FA F1 FF    	lea d, [bp + -15]
+0591   0299 07 E5 02    	call getse				; get number
+0592   029C             
+0593   029C 32          	mov bl, [d]
+0594   029D 37          	mov bh, bl
+0595   029E 33 01 00    	mov bl, [d + 1]
+0596   02A1 07 4E 03    	call atoi				; convert to int in AL
+0597   02A4 23          	mov ah, al				; move to AH
+0598   02A5             	
+0599   02A5 33 02 00    	mov bl, [d + 2]
+0600   02A8 37          	mov bh, bl
+0601   02A9 33 03 00    	mov bl, [d + 3]
+0602   02AC 07 4E 03    	call atoi				; convert to int in AL
+0603   02AF             	
+0604   02AF E7          	pop d	
+0605   02B0 E5          	pop b
+0606   02B1 EE          	popf
+0607   02B2 F9          	leave
+0608   02B3 09          	ret
+0609   02B4             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0610   02B4             ; PRINT 8BIT HEX INTEGER
+0611   02B4             ; byte value in reg BL
+0612   02B4             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0613   02B4             XPUT_U8:
+0614   02B4 D7          	push a
+0615   02B5 DD          	push bl
+0616   02B6 E1          	pushf
+0617   02B7             
+0618   02B7 07 60 03    	call itoa					; convert bl to char in A
+0619   02BA 2F          	mov bl, al					; save al	
+0620   02BB 19 01       	mov al, 1
+0621   02BD 05 02       	syscall bios_uart				; display AH
+0622   02BF 24          	mov ah, bl					; retrieve al
+0623   02C0 19 01       	mov al, 1
+0624   02C2 05 02       	syscall bios_uart				; display AL
+0625   02C4             	
+0626   02C4 EE          	popf
+0627   02C5 EA          	pop bl
+0628   02C6 E4          	pop a
+0629   02C7 09          	ret
+0630   02C8             
+0631   02C8             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0632   02C8             ; PRINT NULL TERMINATED STRING
+0633   02C8             ; pointer in D
+0634   02C8             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0635   02C8             puts:
+0636   02C8 D7          	push a
+0637   02C9 DA          	push d
+0638   02CA E1          	pushf
+0639   02CB             puts_L1:
+0640   02CB 1E          	mov al, [d]
+0641   02CC B9 00       	cmp al, 0
+0642   02CE C6 E1 02    	jz puts_end
+0643   02D1             puts_L2:
+0644   02D1 1D 85 FF    	mov al, [_UART0_LSR]			; read Line Status Register
+0645   02D4 93 20       	test al, $20					; isolate Transmitter Empty
+0646   02D6 C6 D1 02    	jz puts_L2		
+0647   02D9 1E          	mov al, [d]
+0648   02DA 3D 80 FF    	mov [_UART0_DATA], al			; write char to Transmitter Holding Register
+0649   02DD 79          	inc d	
+0650   02DE 0A CB 02    	jmp puts_L1
+0651   02E1             puts_end:
+0652   02E1 EE          	popf
+0653   02E2 E7          	pop d
+0654   02E3 E4          	pop a
+0655   02E4 09          	ret
+0656   02E5             
+0657   02E5             
+0658   02E5             
+0659   02E5             	
+0660   02E5             	
+0661   02E5             
+0662   02E5             
+0663   02E5             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0664   02E5             ;; INPUT A STRING with echo
+0665   02E5             ;; terminates with null
+0666   02E5             ;; pointer in D
+0667   02E5             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0668   02E5             getse:
+0669   02E5 E1          	pushf
+0670   02E6 D7          	push a
+0671   02E7 DA          	push d
+0672   02E8             getse_loop:
+0673   02E8 19 03       	mov al, 3
+0674   02EA 05 02       	syscall bios_uart			; receive in AH
+0675   02EC 76 0A       	cmp ah, 0Ah				; LF
+0676   02EE C6 23 03    	je getse_end
+0677   02F1 76 0D       	cmp ah, 0Dh				; CR
+0678   02F3 C6 23 03    	je getse_end
+0679   02F6 76 5C       	cmp ah, $5C				; '\\'
+0680   02F8 C6 01 03    	je getse_escape
+0681   02FB 1A          	mov al, ah
+0682   02FC 3E          	mov [d], al
+0683   02FD 79          	inc d
+0684   02FE 0A E8 02    	jmp getse_loop
+0685   0301             getse_escape:
+0686   0301 19 03       	mov al, 3
+0687   0303 05 02       	syscall bios_uart			; receive in AH
+0688   0305 76 6E       	cmp ah, 'n'
+0689   0307 C6 15 03    	je getse_LF
+0690   030A 76 72       	cmp ah, 'r'
+0691   030C C6 1C 03    	je getse_CR
+0692   030F 1A          	mov al, ah				; if not a known escape, it is just a normal letter
+0693   0310 3E          	mov [d], al
+0694   0311 79          	inc d
+0695   0312 0A E8 02    	jmp getse_loop
+0696   0315             getse_LF:
+0697   0315 19 0A       	mov al, $0A
+0698   0317 3E          	mov [d], al
+0699   0318 79          	inc d
+0700   0319 0A E8 02    	jmp getse_loop
+0701   031C             getse_CR:
+0702   031C 19 0D       	mov al, $0D
+0703   031E 3E          	mov [d], al
+0704   031F 79          	inc d
+0705   0320 0A E8 02    	jmp getse_loop
+0706   0323             getse_end:
+0707   0323 19 00       	mov al, 0
+0708   0325 3E          	mov [d], al				; terminate string
+0709   0326 E7          	pop d
+0710   0327 E4          	pop a
+0711   0328 EE          	popf
+0712   0329 09          	ret
+0713   032A             
+0714   032A             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0715   032A             ; PRINT NEW LINE
+0716   032A             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0717   032A             put_nl:
+0718   032A E1          	pushf
+0719   032B D7          	push a
+0720   032C 10 01 0A    	mov a, $0A01
+0721   032F 05 02       	syscall bios_uart
+0722   0331 10 01 0D    	mov a, $0D01
+0723   0334 05 02       	syscall bios_uart
+0724   0336 E4          	pop a
+0725   0337 EE          	popf
+0726   0338 09          	ret
+0727   0339             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0728   0339             ; CONVERT ASCII 'O'..'F' TO INTEGER 0..15
+0729   0339             ; ASCII in BL
+0730   0339             ; result in AL
+0731   0339             ; ascii for F = 0100 0110
+0732   0339             ; ascii for 9 = 0011 1001
+0733   0339             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0734   0339             hex_ascii_encode:
+0735   0339 1B          	mov al, bl	
+0736   033A 93 40       	test al, 40h				; test if letter or number
+0737   033C C7 42 03    	jnz hex_letter
+0738   033F 87 0F       	and al, 0Fh				; get number
+0739   0341 09          	ret
+0740   0342             hex_letter:
+0741   0342 DC          	push ah
+0742   0343 24          	mov ah, bl
+0743   0344 07 9D 03    	call to_upper
+0744   0347 1A          	mov al, ah	
+0745   0348 87 0F       	and al, 0Fh				; get letter
+0746   034A 6A 09       	add al, 9
+0747   034C E9          	pop ah
+0748   034D 09          	ret
+0749   034E             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0750   034E             ; ATOI
+0751   034E             ; 2 letter hex string in B
+0752   034E             ; 8bit integer returned in AL
+0753   034E             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0754   034E             atoi:
+0755   034E E1          	pushf
+0756   034F D8          	push b
+0757   0350             		
+0758   0350 07 39 03    	call hex_ascii_encode			; convert BL to 4bit code in AL
+0759   0353 30          	mov bl, bh
+0760   0354 DB          	push al					; save a
+0761   0355 07 39 03    	call hex_ascii_encode
+0762   0358 EA          	pop bl	
+0763   0359 FD 9E 04    	shl al, 4
+0764   035C 8C          	or al, bl
+0765   035D             	
+0766   035D E5          	pop b
+0767   035E EE          	popf
+0768   035F 09          	ret	
+0769   0360             
+0770   0360             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0771   0360             ; ITOA
+0772   0360             ; 8bit value in BL
+0773   0360             ; 2 byte ASCII result in A
+0774   0360             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0775   0360             itoa:
+0776   0360 E1          	pushf
+0777   0361 DA          	push d
+0778   0362 DE          	push	bh
+0779   0363 DD          	push bl
+0780   0364             
+0781   0364 A7 00       	mov bh, 0
+0782   0366             	
+0783   0366 FD 87 0F    	and 	bl, $0F
+0784   0369 3B DA 04    	mov 	d, s_hex_digits
+0785   036C 5A          	add 	d, b
+0786   036D 1E          	mov 	al, [d]				; get ASCII
+0787   036E EA          	pop 	bl
+0788   036F 52 01 00    	sub sp, 1				; push bl back
+0789   0372 DB          	push al
+0790   0373             	
+0791   0373 FD 87 F0    	and 	bl, $F0
+0792   0376 FD A4 04    	shr 	bl, 4
+0793   0379 3B DA 04    	mov 	d, s_hex_digits
+0794   037C 5A          	add 	d, b
+0795   037D 1E          	mov 	al, [d]				; get ASCII
+0796   037E             
+0797   037E 23          	mov ah, al
+0798   037F E8          	pop 	al	
+0799   0380             	
+0800   0380 EA          	pop 	bl
+0801   0381 EB          	pop bh
+0802   0382 E7          	pop 	d
+0803   0383 EE          	popf
+0804   0384 09          	ret
+0805   0385             
+0806   0385             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0807   0385             ; STRCMP
+0808   0385             ; compare two strings
+0809   0385             ; str1 in SI
+0810   0385             ; str2 in DI
+0811   0385             ; changes: AL SI DI
+0812   0385             ; CREATE A STRING COMPAIRON INSTRUCION ?????
+0813   0385             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0814   0385             strcmp:
+0815   0385             strcmp_loop:
+0816   0385 F3          	cmpsb					; compare a byte of the strings
+0817   0386 C7 92 03    	jne strcmp_ret
+0818   0389 FB FF FF    	lea d, [si + -1]
+0819   038C 1E          	mov al, [d]
+0820   038D B9 00       	cmp al, 0				; check if at end of string (null)
+0821   038F C7 85 03    	jne strcmp_loop				; equal chars but not at end
+0822   0392             strcmp_ret:				
+0823   0392 09          	ret
+0824   0393             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0825   0393             ; TO LOWER
+0826   0393             ; input in AL
+0827   0393             ; output in AL
+0828   0393             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0829   0393             to_lower:
+0830   0393 E1          	pushf
+0831   0394 B9 5A       	cmp al, 'Z'
+0832   0396 D1 9B 03    	jgu to_lower_ret
+0833   0399 6A 20       	add al, 20h				; convert to lower case
+0834   039B             to_lower_ret:
+0835   039B EE          	popf
+0836   039C 09          	ret
+0837   039D             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0838   039D             ; TO UPPER
+0839   039D             ; input in AL
+0840   039D             ; output in AL
+0841   039D             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0842   039D             to_upper:
+0843   039D E1          	pushf
+0844   039E B9 61       	cmp al, 'a'
+0845   03A0 C8 A5 03    	jlu to_upper_ret
+0846   03A3 6F 20       	sub al, 20h				; convert to upper case
+0847   03A5             to_upper_ret:
+0848   03A5 EE          	popf
+0849   03A6 09          	ret
+0850   03A7             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0851   03A7             ; PRINT DECIMAL INTEGER
+0852   03A7             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0853   03A7             print_decimal:
+0854   03A7 09          	ret
+0855   03A8             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0856   03A8             ; GET HEX FILE
+0857   03A8             ; di = destination address
+0858   03A8             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0859   03A8             load_hex:
+0860   03A8 F8 00 60    	enter $6000
+0861   03AB             	
+0862   03AB 10 00 90    	mov a, $9000					; destination
+0863   03AE 4F          	mov di, a	
+0864   03AF             						; string data block
+0865   03AF FA 01 A0    	lea d, [bp + -24575]			; start of string data block
+0866   03B2 07 E5 02    	call getse					; get program string
+0867   03B5 13          	mov a, d
+0868   03B6 4D          	mov si, a
+0869   03B7             load_hex_loop:
+0870   03B7 F6          	lodsb					; load from [SI] to AL
+0871   03B8 B9 00       	cmp al, 0				; check if ASCII 0
+0872   03BA C6 C7 03    	jz load_hex_ret
+0873   03BD 36          	mov bh, al
+0874   03BE F6          	lodsb
+0875   03BF 2F          	mov bl, al
+0876   03C0 07 4E 03    	call atoi				; convert ASCII byte in B to int (to AL)
+0877   03C3 F7          	stosb					; store AL to [DI]
+0878   03C4 0A B7 03    	jmp load_hex_loop
+0879   03C7             load_hex_ret:
+0880   03C7 F9          	leave
+0881   03C8 09          	ret
+0882   03C9             
+0883   03C9             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0884   03C9             ; HEX STRING TO BINARY
+0885   03C9             ; di = destination address
+0886   03C9             ; si = source
+0887   03C9             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0888   03C9             hex_to_int:
+0889   03C9             hex_to_int_L1:
+0890   03C9 F6          	lodsb					; load from [SI] to AL
+0891   03CA B9 00       	cmp al, 0				; check if ASCII 0
+0892   03CC C6 D9 03    	jz hex_to_int_ret
+0893   03CF 36          	mov bh, al
+0894   03D0 F6          	lodsb
+0895   03D1 2F          	mov bl, al
+0896   03D2 07 4E 03    	call atoi				; convert ASCII byte in B to int (to AL)
+0897   03D5 F7          	stosb					; store AL to [DI]
+0898   03D6 0A C9 03    	jmp hex_to_int_L1
+0899   03D9             hex_to_int_ret:
+0900   03D9 09          	ret	
+0901   03DA             		
+0902   03DA             
+0903   03DA             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0904   03DA             ; DATA BLOCK
+0905   03DA             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0906   03DA 0A 0A 0D 53 s_welcome:		.db "\n\n\rSol-1 74HC HomebrewCPU MiniComputer\n"
+0906   03DE 6F 6C 2D 31 
+0906   03E2 20 37 34 48 
+0906   03E6 43 20 48 6F 
+0906   03EA 6D 65 62 72 
+0906   03EE 65 77 43 50 
+0906   03F2 55 20 4D 69 
+0906   03F6 6E 69 43 6F 
+0906   03FA 6D 70 75 74 
+0906   03FE 65 72 0A 
+0907   0401 42 49 4F 53 				.db "BIOS Version 0.1\n\n\r"
+0907   0405 20 56 65 72 
+0907   0409 73 69 6F 6E 
+0907   040D 20 30 2E 31 
+0907   0411 0A 0A 0D 
+0908   0414 74 65 72 6D 				.db "terminal-1 initialized\n\r", 0
+0908   0418 69 6E 61 6C 
+0908   041C 2D 31 20 69 
+0908   0420 6E 69 74 69 
+0908   0424 61 6C 69 7A 
+0908   0428 65 64 0A 0D 
+0908   042C 00 
+0909   042D 0A 0D 62 6F s_boot:			.db "\n\rbooting from disk ", 0
+0909   0431 6F 74 69 6E 
+0909   0435 67 20 66 72 
+0909   0439 6F 6D 20 64 
+0909   043D 69 73 6B 20 
+0909   0441 00 
+0910   0442 6D 61 70 70 s_kernel_setup:	.db "mapping the kernel\'s page-table to physical RAM...", 0
+0910   0446 69 6E 67 20 
+0910   044A 74 68 65 20 
+0910   044E 6B 65 72 6E 
+0910   0452 65 6C 27 73 
+0910   0456 20 70 61 67 
+0910   045A 65 2D 74 61 
+0910   045E 62 6C 65 20 
+0910   0462 74 6F 20 70 
+0910   0466 68 79 73 69 
+0910   046A 63 61 6C 20 
+0910   046E 52 41 4D 2E 
+0910   0472 2E 2E 
+0911   0474             s_masks	:		.db "\n\rinterrupt masks register set to 0xFF", 0
+0912   0474 0A 0D 73 74 s_bios2: 		.db "\n\rstarting the kernel...\n\r", 0
+0912   0478 61 72 74 69 
+0912   047C 6E 67 20 74 
+0912   0480 68 65 20 6B 
+0912   0484 65 72 6E 65 
+0912   0488 6C 2E 2E 2E 
+0912   048C 0A 0D 00 
+0913   048F 72 65 73 65 s_bios3: 		.db "resetting IDE drive\n\r", 0
+0913   0493 74 74 69 6E 
+0913   0497 67 20 49 44 
+0913   049B 45 20 64 72 
+0913   049F 69 76 65 0A 
+0913   04A3 0D 00 
+0914   04A5 63 6F 6E 66 s_bios4: 		.db "configuring Timer-1\n\r", 0
+0914   04A9 69 67 75 72 
+0914   04AD 69 6E 67 20 
+0914   04B1 54 69 6D 65 
+0914   04B5 72 2D 31 0A 
+0914   04B9 0D 00 
+0915   04BB 50 49 4F 2D s_bios5:	 		.db "PIO-A set to output mode\n\r", 0
+0915   04BF 41 20 73 65 
+0915   04C3 74 20 74 6F 
+0915   04C7 20 6F 75 74 
+0915   04CB 70 75 74 20 
+0915   04CF 6D 6F 64 65 
+0915   04D3 0A 0D 00 
+0916   04D6             
+0917   04D6             
+0918   04D6 0A          s_nl_2:			.db "\n"
+0919   04D7 0A 0D 00    s_nl_1:			.db "\n\r", 0
+0920   04DA             
+0921   04DA             
+0922   04DA             
+0923   04DA 30 31 32 33 s_hex_digits:		.db "0123456789ABCDEF"
+0923   04DE 34 35 36 37 
+0923   04E2 38 39 41 42 
+0923   04E6 43 44 45 46 
+0924   04EA 74 68 69 73 s_bkpt: 			.db "this is the breakpoint.", 0
+0924   04EE 20 69 73 20 
+0924   04F2 74 68 65 20 
+0924   04F6 62 72 65 61 
+0924   04FA 6B 70 6F 69 
+0924   04FE 6E 74 2E 00 
+0925   0502             
+0926   0502             
+0927   0502 0A 0A 0D 73 s_priv1:			.db "\n\n\rsoftware failure: privilege exception "
+0927   0506 6F 66 74 77 
+0927   050A 61 72 65 20 
+0927   050E 66 61 69 6C 
+0927   0512 75 72 65 3A 
+0927   0516 20 70 72 69 
+0927   051A 76 69 6C 65 
+0927   051E 67 65 20 65 
+0927   0522 78 63 65 70 
+0927   0526 74 69 6F 6E 
+0927   052A 20 
+0928   052B 70 72 65 73 				.db "press any key to continue...\n\r", 0
+0928   052F 73 20 61 6E 
+0928   0533 79 20 6B 65 
+0928   0537 79 20 74 6F 
+0928   053B 20 63 6F 6E 
+0928   053F 74 69 6E 75 
+0928   0543 65 2E 2E 2E 
+0928   0547 0A 0D 00 
+0929   054A 0A 0D 65 78 s_divzero:		.db "\n\rexception: zero division\n\r", 0
+0929   054E 63 65 70 74 
+0929   0552 69 6F 6E 3A 
+0929   0556 20 7A 65 72 
+0929   055A 6F 20 64 69 
+0929   055E 76 69 73 69 
+0929   0562 6F 6E 0A 0D 
+0929   0566 00 
+0930   0567             
+0931   0567             
+0932   0567             
+0933   0567             
+0934   0567             
+0935   0567             
+0936   0567             .end
+tasm: Number of errors = 0

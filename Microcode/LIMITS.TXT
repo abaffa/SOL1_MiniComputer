@@ -1,0 +1,15 @@
+Maximum number of labels			15000
+Maximum length of labels			32 characters
+Maximum address space				64 KB (65536 bytes)
+Maximum number of nested INCLUDES		4
+Maximum length of TITLE string			79 characters
+Maximum source line length			255 characters
+Maximum length after macro expansion		255 characters
+Maximum length of expressions			255 characters
+Maximum length of pathnames			79 characters
+Maximum length of command line			127 characters
+Maximum number of instructions (per table)	1200
+Maximum number of macros			1000
+Maximum number of macro arguments		10
+Maximum length of macro argument		16 characters
+Memory requirements				512KB

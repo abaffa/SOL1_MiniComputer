@@ -1,0 +1,217 @@
+0001   0000             .include bios.exp
+0001+  0000             boot_origin      .EQU  $8204
+0002+  0000             bios_uart        .EQU  $0002
+0003+  0000             bios_ide         .EQU  $0003
+0004+  0000             noname._IDE_BUFFER .EQU  $8000
+0002   0000             
+0003   8204             .org boot_origin
+0004   8204             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0005   8204             ; SYSTEM CONSTANTS / EQUATIONS
+0006   8204             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0007   8204             _UART0_DATA				.equ $FF80				; data
+0008   8204             _UART0_DLAB_0				.equ $FF80				; divisor latch low byte
+0009   8204             _UART0_DLAB_1				.equ $FF81				; divisor latch high byte
+0010   8204             _UART0_IER				.equ $FF81				; Interrupt enable register
+0011   8204             _UART0_FCR				.equ $FF82				; FIFO control register
+0012   8204             _UART0_LCR				.equ $FF83				; line control register
+0013   8204             _UART0_LSR				.equ $FF85				; line status register
+0014   8204             
+0015   8204             _IDE_BASE				.equ $FFD0				; IDE BASE
+0016   8204             _IDE_R0					.equ _IDE_BASE + 0		; DATA PORT
+0017   8204             _IDE_R1					.equ _IDE_BASE + 1		; READ: ERROR CODE, WRITE: FEATURE
+0018   8204             _IDE_R2					.equ _IDE_BASE + 2		; NUMBER OF SECTORS TO TRANSFER
+0019   8204             _IDE_R3					.equ _IDE_BASE + 3		; SECTOR ADDRESS LBA 0 [0:7]
+0020   8204             _IDE_R4					.equ _IDE_BASE + 4		; SECTOR ADDRESS LBA 1 [8:15]
+0021   8204             _IDE_R5					.equ _IDE_BASE + 5		; SECTOR ADDRESS LBA 2 [16:23]
+0022   8204             _IDE_R6					.equ _IDE_BASE + 6		; SECTOR ADDRESS LBA 3 [24:27 (LSB)]
+0023   8204             _IDE_R7					.equ _IDE_BASE + 7		; READ: STATUS, WRITE: COMMAND
+0024   8204             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0025   8204             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0026   8204             ; Setting up kernel process.
+0027   8204             ; map kernel memory to BIOS 64KB
+0028   8204             ; 32 pages of 2KB = 64KB
+0029   8204             ; bl = ptb
+0030   8204             ; bh = page number (5bits)
+0031   8204             ; a = physical address
+0032   8204             ; for kernel, a goes from 0 to 31, but for the last page, bit '11' must be 1 for DEVICE space
+0033   8204             ; bl = 0
+0034   8204             ; bh(ms 5 bits) = 0 to 31
+0035   8204             ; a = 0000_1000_000_00000
+0036   8204             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0037   8204             setup_kernel_mem:
+0038   8204 3B C5 82    	mov d, s_boot1
+0039   8207 07 93 82    	call puts
+0040   820A             	
+0041   820A 3B E0 82    	mov d, s_kernel_setup
+0042   820D 07 93 82    	call puts
+0043   8210             ; map pages 0 to 30 to normal kernel ram memory.
+0044   8210 2E 00       	mov bl, 0					; set PTB = 0 for kernel
+0045   8212 A7 00       	mov bh, 0					; start at PAGE 0
+0046   8214 10 00 00    	mov a, 0						; set MEM/IO bit to MEMORY, for physical address. this means physical address starting at 0, but in MEMORY space
+0047   8217             map_kernel_mem_L1:
+0048   8217 02          	pagemap						; write page table entry
+0049   8218 55 00 08    	add b, $0800					; increase page number (msb 5 bits of BH only)
+0050   821B 7A          	inc al						; increase both 
+0051   821C B9 1F       	cmp al, 31					; check to see if we reached the end of memory for kernel
+0052   821E C7 17 82    	jne map_kernel_mem_L1
+0053   8221             	
+0054   8221             ; here we map the last page of kernel memory, to DEVICE space, or the last 2KB of BIOS memory
+0055   8221             ; so that the kernel has access to IO devices.
+0056   8221 89 00 08    	or a, $0800					; set MEM/IO bit to DEVICE, for physical address
+0057   8224 02          	pagemap						; write page table entry
+0058   8225             	
+0059   8225 19 00       	mov al, 0
+0060   8227 01          	setptb						; set process number to 0 (strictly not needed since we are in Supervisor mode)
+0061   8228             								; which forces the page number to 0
+0062   8228 3B 34 83    	mov d, s_boot
+0063   822B 07 93 82    	call puts
+0064   822E             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	
+0065   822E             ; we read the first kernel sector, in order to obtain the reset vector at location $10
+0066   822E 38 00 00    	mov c, 0
+0067   8231 26 01 00    	mov b, 1					; start at disk sector 1
+0068   8234 3B 00 80    	mov d, _IDE_BUFFER		; we read into the bios ide buffer
+0069   8237 10 02 01    	mov a, $0102				; disk read, 1 sector
+0070   823A 05 03       	syscall bios_ide			; read sector
+0071   823C 14 10 80    	mov a, [_IDE_BUFFER + $10]	; here we now have the kernel RESET VECTOR
+0072   823F FD 78       	mov g, a					; save vector in G	
+0073   8241             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0074   8241             	
+0075   8241             ; read operating system into kernel memory
+0076   8241 10 00 00    	mov a, 0
+0077   8244 42 C1 82    	mov [index], a
+0078   8247 3B 00 00    	mov d, 0				; start at kernel memory address 0
+0079   824A 26 01 00    	mov b, 1				; start at disk sector 1
+0080   824D             bootstrap_L1:
+0081   824D 22 3E       	mov ah, '>'
+0082   824F 07 B0 82    	call putchar
+0083   8252 38 00 00    	mov c, 0
+0084   8255 DA          	push d					; save kernel memory pointer
+0085   8256 3B 00 80    	mov d, _IDE_BUFFER		; we read into the bios ide buffer
+0086   8259 10 02 01    	mov a, $0102				; disk read, 1 sector
+0087   825C 05 03       	syscall bios_ide			; read sector
+0088   825E 38 00 02    	mov c, 512				; 512 bytes to copy
+0089   8261 10 00 80    	mov a, _IDE_BUFFER
+0090   8264 4D          	mov si, a
+0091   8265 E7          	pop d					; retrieve kernel memory pointer
+0092   8266 FD 50       	mov di, d
+0093   8268 FD 08       	supcopy					; now copy data from bios mem to kernel mem
+0094   826A 14 C1 82    	mov a, [index]
+0095   826D 77          	inc a
+0096   826E 42 C1 82    	mov [index], a
+0097   8271 AF 20 00    	cmp a, 32		
+0098   8274 C6 7F 82    	je bootstrap_end
+0099   8277 FD 77       	inc b
+0100   8279 58 00 02    	add d, 512
+0101   827C 0A 4D 82    	jmp bootstrap_L1
+0102   827F             bootstrap_end:
+0103   827F             ; interrupt masks	
+0104   827F 19 FF       	mov al, $FF
+0105   8281 FD 0F       	stomsks						; store masks
+0106   8283 3B 0C 83    	mov d, s_masks
+0107   8286 07 93 82    	call puts
+0108   8289             	
+0109   8289 3B 4E 83    	mov d, s_bios2
+0110   828C 07 93 82    	call puts
+0111   828F             ; now we start the kernel by using a special instruction.
+0112   828F             ; this instruction turns paging on and jumps to the address given in register A
+0113   828F FD 12       	mov a, g				; retrieve kernel reset vector
+0114   8291 FD 09       	supstart
+0115   8293             	
+0116   8293             	
+0117   8293             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0118   8293             ; PRINT NULL TERMINATED STRING
+0119   8293             ; pointer in D
+0120   8293             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0121   8293             puts:
+0122   8293 D7          	push a
+0123   8294 DA          	push d
+0124   8295 E1          	pushf
+0125   8296             puts_L1:
+0126   8296 1E          	mov al, [d]
+0127   8297 B9 00       	cmp al, 0
+0128   8299 C6 AC 82    	jz puts_end
+0129   829C             puts_L2:
+0130   829C 1D 85 FF    	mov al, [_UART0_LSR]			; read Line Status Register
+0131   829F 93 20       	test al, $20					; isolate Transmitter Empty
+0132   82A1 C6 9C 82    	jz puts_L2		
+0133   82A4 1E          	mov al, [d]
+0134   82A5 3D 80 FF    	mov [_UART0_DATA], al			; write char to Transmitter Holding Register
+0135   82A8 79          	inc d	
+0136   82A9 0A 96 82    	jmp puts_L1
+0137   82AC             puts_end:
+0138   82AC EE          	popf
+0139   82AD E7          	pop d
+0140   82AE E4          	pop a
+0141   82AF 09          	ret
+0142   82B0             	
+0143   82B0             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0144   82B0             ; putchar
+0145   82B0             ; char in ah
+0146   82B0             ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+0147   82B0             putchar:
+0148   82B0 D7          	push a
+0149   82B1 E1          	pushf
+0150   82B2             putchar_L1:
+0151   82B2 1D 85 FF    	mov al, [_UART0_LSR]			; read Line Status Register
+0152   82B5 93 20       	test al, 20h					; isolate Transmitter Empty
+0153   82B7 C6 B2 82    	jz putchar_L1		
+0154   82BA 1A          	mov al, ah
+0155   82BB 3D 80 FF    	mov [_UART0_DATA], al			; write char to Transmitter Holding Register
+0156   82BE EE          	popf
+0157   82BF E4          	pop a
+0158   82C0 09          	ret
+0159   82C1             
+0160   82C1 00 00       index:			.dw 0
+0161   82C3 00 00       buffer_addr:		.dw 0
+0162   82C5             
+0163   82C5 65 78 65 63 s_boot1:			.db "executing boot-loader...\n\r", 0
+0163   82C9 75 74 69 6E 
+0163   82CD 67 20 62 6F 
+0163   82D1 6F 74 2D 6C 
+0163   82D5 6F 61 64 65 
+0163   82D9 72 2E 2E 2E 
+0163   82DD 0A 0D 00 
+0164   82E0 6D 61 70 70 s_kernel_setup:	.db "mapping kernel page-table to physical RAM\n\r", 0
+0164   82E4 69 6E 67 20 
+0164   82E8 6B 65 72 6E 
+0164   82EC 65 6C 20 70 
+0164   82F0 61 67 65 2D 
+0164   82F4 74 61 62 6C 
+0164   82F8 65 20 74 6F 
+0164   82FC 20 70 68 79 
+0164   8300 73 69 63 61 
+0164   8304 6C 20 52 41 
+0164   8308 4D 0A 0D 00 
+0165   830C 0A 0D 69 6E s_masks:			.db "\n\rinterrupt masks register set to $FF\n\r", 0
+0165   8310 74 65 72 72 
+0165   8314 75 70 74 20 
+0165   8318 6D 61 73 6B 
+0165   831C 73 20 72 65 
+0165   8320 67 69 73 74 
+0165   8324 65 72 20 73 
+0165   8328 65 74 20 74 
+0165   832C 6F 20 24 46 
+0165   8330 46 0A 0D 00 
+0166   8334 6C 6F 61 64 s_boot:			.db "loading kernel from disk ", 0
+0166   8338 69 6E 67 20 
+0166   833C 6B 65 72 6E 
+0166   8340 65 6C 20 66 
+0166   8344 72 6F 6D 20 
+0166   8348 64 69 73 6B 
+0166   834C 20 00 
+0167   834E 65 6E 74 65 s_bios2: 		.db "entering protected-mode\n\r"
+0167   8352 72 69 6E 67 
+0167   8356 20 70 72 6F 
+0167   835A 74 65 63 74 
+0167   835E 65 64 2D 6D 
+0167   8362 6F 64 65 0A 
+0167   8366 0D 
+0168   8367 73 74 61 72 				.db "starting the kernel...\n\r", 0
+0168   836B 74 69 6E 67 
+0168   836F 20 74 68 65 
+0168   8373 20 6B 65 72 
+0168   8377 6E 65 6C 2E 
+0168   837B 2E 2E 0A 0D 
+0168   837F 00 
+0169   8380             
+0170   8380             .endtasm: Number of errors = 0

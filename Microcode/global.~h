@@ -1,0 +1,6 @@
+struct{
+        int line;
+        char description[256];
+} bookmarks[256];
+int bookmark_tos;
+ 

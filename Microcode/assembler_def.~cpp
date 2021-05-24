@@ -1,0 +1,373 @@
+typedef enum {
+	DIRECTIVE = 1, INCLUDE,
+	
+	_VOID, _CHAR, _INT, _FLOAT, _DOUBLE,
+	_SHORT, _LONG, _SIGNED, _UNSIGNED,
+	
+	STRUCT,	ENUM,
+	
+	IF, THEN, ELSE, FOR, DO, WHILE, BREAK, CONTINUE, SWITCH, CASE, DEFAULT, RETURN, _CONST,
+	SIZEOF,
+	
+	PLUS, MINUS, ASTERISK, DIVISION, INCREMENT, DECREMENT, MOD, DOT, ARROW,
+	
+	EQUAL, NOT_EQUAL, LESS_THAN, LESS_THAN_OR_EQUAL, GREATER_THAN, GREATER_THAN_OR_EQUAL,
+	LOGICAL_AND, LOGICAL_OR, LOGICAL_NOT,
+	ATTRIBUTION,
+	
+	BITWISE_AND, BITWISE_OR, BITWISE_NOT, BITWISE_SL, BITWISE_SR, POINTER_REF,
+	
+	OPENING_PAREN, CLOSING_PAREN,
+	OPENING_BRACE, CLOSING_BRACE,
+	OPENING_BRACKET, CLOSING_BRACKET,
+	
+	SEMICOLON, COMMA,
+	
+	SYSTEM
+} _ATOM; // internal token representation
+_ATOM tok;
+
+typedef enum {
+	DELIMITER = 1,
+	CHAR_CONST, STRING_CONST, INTEGER_CONST, FLOAT_CONST, DOUBLE_CONST,
+	IDENTIFIER, RESERVED, END
+} _ATOM_TYPE;
+_ATOM_TYPE token_type;
+
+struct _keyword_table{
+	char *keyword;
+	_ATOM key;
+} keyword_table[] = {
+	"void", _VOID,
+	"char", _CHAR,
+	"int", _INT,
+	"float", _FLOAT,
+	"double", _DOUBLE,
+	"const", _CONST,
+	"enum", ENUM,
+	"struct", STRUCT,
+	"sizeof", SIZEOF,
+	"return", RETURN,
+	"if", IF,
+	"then", THEN,
+	"else", ELSE,
+	"for", FOR,
+	"do", DO,
+	"break", BREAK,
+	"continue", CONTINUE,
+	"while", WHILE,
+	"switch", SWITCH,
+	"case", CASE,
+	"default", DEFAULT,
+	"include", INCLUDE,
+	"system", SYSTEM,
+	"", 0
+};
+
+typedef enum {
+	SYNTAX,
+	OPENING_PAREN_EXPECTED, 
+	CLOSING_PAREN_EXPECTED,
+	OPENING_BRACE_EXPECTED,
+	CLOSING_BRACE_EXPECTED,
+	OPENING_BRACKET_EXPECTED,
+	CLOSING_BRACKET_EXPECTED,
+	COMMA_EXPECTED,
+	SEMICOLON_EXPECTED,
+	VAR_TYPE_EXPECTED,
+	IDENTIFIER_EXPECTED,
+	EXCEEDED_GLOBAL_VAR_LIMIT,
+	EXCEEDED_FUNC_DECL_LIMIT,
+	NOT_VAR_OR_FUNC_OUTSIDE,
+	NO_MAIN_FOUND,
+	UNDECLARED_FUNC,
+	SINGLE_QUOTE_EXPECTED,
+	DOUBLE_QUOTE_EXPECTED,
+	UNDECLARED_VARIABLE,
+	MAX_PARAMS_LIMIT_REACHED,
+	USER_FUNC_CALLS_LIMIT_REACHED,
+	LOCAL_VAR_LIMIT_REACHED,
+	RETURNING_VALUE_FROM_VOID_FUNCTION,
+	INVALID_EXPRESSION,
+	INVALID_ARGUMENT_FOR_BITWISE_NOT,
+	WHILE_KEYWORD_EXPECTED,
+	DUPLICATE_GLOBAL_VARIABLE,
+	DUPLICATE_LOCAL_VARIABLE,
+	STRING_CONSTANT_EXPECTED,
+	POINTER_EXPECTED,
+	INSUFFICIENT_ARGUMENTS,
+	POINTER_SYNTAX,
+	TOO_MANY_MATRIX_DIMENSIONS,
+	INVALID_MATRIX_DIMENSION,
+	MEMORY_ALLOCATION_FAILURE,
+	MATRIX_INDEX_OUTSIDE_BOUNDS,
+	INVALID_MATRIX_ATTRIBUTION,
+	MATRIX_EXPECTED,
+	UNKOWN_LIBRARY,
+	UNKNOWN_DIRECTIVE,
+	DIRECTIVE_SYNTAX,
+	INCOMPATIBLE_FUNCTION_ARGUMENT,
+	CONSTANT_VARIABLE_ASSIGNMENT,
+	INVALID_BINARY_OPERANDS,
+	STRUCT_EXPECTED,
+	STRUCT_NAME_EXPECTED,
+	UNDECLARED_STRUCT,
+	INVALID_PRINTF_FORMAT_CODE,
+	INCLUDE_FILE_NOT_FOUND,
+	EXTENSION_EXPECTED
+} _ERROR;
+
+
+char *error_table[] = {
+	"syntax error",
+	"syntax error: opening parenthesis expected",
+	"syntax error: closing parenthesis expected",
+	"syntax error: opening brace expected",
+	"syntax error: closing brace expected",
+	"syntax error: opening bracket expected",
+	"syntax error: closing bracket expected",
+	"syntax error: comma expected",
+	"syntax error: semicolon expected",
+	"syntax error: variable type expected in the declaration",
+	"syntax error: identifier expected",
+	"global variable limit reached (max = 100)",
+	"function declaration limit reached (max = 100)",
+	"syntax error: only variable and function declarations are allowed outside of functions",
+	"main funtion not found",
+	"undeclared function",
+	"syntax error: single quote expected",
+	"syntax error: double quotes expected",
+	"undeclared variable or unkown constant",
+	"maximum number of function paramters reached (max = 10)",
+	"maximum number of program-defined function calls reached (max = 100)",
+	"local variables limit reached (max = 200)",
+	"returning value from void function",
+	"invalid expression",
+	"invalid argument for the bitwise not operation",
+	"while part of do-while loop expected",
+	"duplicate global variable declared",
+	"duplicate local variable declared",
+	"string constant expected",
+	"pointer expected",
+	"insufficient function arguments",
+	"pointer syntax error",
+	"declared matrix exceeds the maximum number of dimensions (max = 10)",
+	"invalid matrix dimension",
+	"memory allocation failure",
+	"matrix index outside bounds",
+	"invalid matrix attribution",
+	"matrix expected",
+	"unkown library",
+	"unknown directive",
+	"directive syntax error",
+	"incompatible function argument",
+	"constant variable assignment",
+	"invalid binary operands",
+	"struct expected",
+	"struct name expected but token is not an identifier for any structs",
+	"undeclared struct",
+	"invalid printf format code",
+	"include file not found",
+	"library file extension expected"
+};
+
+
+
+void get_token(void){
+	char *t;
+	// skip blank spaces
+
+	*token = '\0';
+	tok = 0;
+	t = token;
+	
+	while(isspace(*prog) || *prog == '\n') prog++;
+
+	if(*prog == '\0'){
+		token_type = END;
+		return;
+	}
+
+	if(*prog == '\''){
+		*t++ = '\'';
+		prog++;
+		if(*prog == '\\'){
+			*t++ = '\\';
+			prog++;
+			*t++ = *prog++;
+		}
+		else *t++ = *prog++;
+		
+		if(*prog != '\'') show_error(SINGLE_QUOTE_EXPECTED);
+		
+		*t++ = '\'';
+		prog++;
+		token_type = CHAR_CONST;
+		*t = '\0';
+		convert_constant(); // converts this string token with quotation marks to a non quotation marks string, and also converts escape sequences to their real bytes
+	}
+	else if(*prog == '\"'){
+		*t++ = '\"';
+		prog++;
+		while(*prog != '\"' && *prog) *t++ = *prog++;
+		if(*prog != '\"') show_error(DOUBLE_QUOTE_EXPECTED);
+		*t++ = '\"';
+		prog++;
+		token_type = STRING_CONST;
+		*t = '\0';
+		convert_constant(); // converts this string token qith quotation marks to a non quotation marks string, and also converts escape sequences to their real bytes
+	}
+	else if(isdigit(*prog)){
+		while(isdigit(*prog)) *t++ = *prog++;
+		if(*prog == '.'){
+			*t++ = '.';
+			prog++;
+			while(isdigit(*prog)) *t++ = *prog++;
+			if(*prog == 'D'){
+				prog++;
+				token_type = DOUBLE_CONST;
+			}
+			else
+				token_type = FLOAT_CONST;
+		}
+		else token_type = INTEGER_CONST;
+	}
+	else if(is_idchar(*prog)){
+		while(is_idchar(*prog) || isdigit(*prog))
+			*t++ = *prog++;
+		*t = '\0';
+
+		if((tok = find_keyword(token)) != -1) token_type = RESERVED;
+		else token_type = IDENTIFIER;
+	}
+	else if(isdelim(*prog)){
+		token_type = DELIMITER;	
+		
+		if(*prog == '#'){
+			*t++ = *prog++;
+			tok = DIRECTIVE;
+		}
+		else if(*prog == '['){
+			*t++ = *prog++;
+			tok = OPENING_BRACKET;
+		}
+		else if(*prog == ']'){
+			*t++ = *prog++;
+			tok = CLOSING_BRACKET;
+		}
+		else if(*prog == '{'){
+			*t++ = *prog++;
+			tok = OPENING_BRACE;
+		}
+		else if(*prog == '}'){
+			*t++ = *prog++;
+			tok = CLOSING_BRACE;
+		}
+		else if(*prog == '='){
+			*t++ = *prog++;
+			if (*prog == '='){
+				*t++ = *prog++;
+				tok = EQUAL;
+			}
+			else tok = ATTRIBUTION;
+		}
+		else if(*prog == '&'){
+			*t++ = *prog++;
+			if(*prog == '&'){
+				*t++ = *prog++;
+				tok = LOGICAL_AND;
+			}
+			else tok = POINTER_REF;
+		}
+		else if(*prog == '|'){
+			*t++ = *prog++;
+			if (*prog == '|'){
+				*t++ = *prog++;
+				tok = LOGICAL_OR;
+			}
+			else tok = BITWISE_OR;
+		}
+		else if(*prog == '~'){
+			*t++ = *prog++;
+			tok = BITWISE_NOT;
+		}
+		else if(*prog == '<'){
+			*t++ = *prog++;
+			if (*prog == '='){
+				*t++ = *prog++;
+				tok = LESS_THAN_OR_EQUAL;
+			}
+			else tok = LESS_THAN;
+		}
+		else if(*prog == '>'){
+			*t++ = *prog++;
+			if (*prog == '='){
+				*t++ = *prog++;
+				tok = GREATER_THAN_OR_EQUAL;
+			}
+			else tok = GREATER_THAN;
+		}
+		else if(*prog == '!'){
+			*t++ = *prog++;
+			if(*prog == '='){
+				*t++ = *prog++;
+				tok = NOT_EQUAL;
+			}
+			else tok = LOGICAL_NOT;
+		}
+		else if(*prog == '+'){
+			*t++ = *prog++;
+			if(*prog == '+'){
+				*t++ = *prog++;
+				tok = INCREMENT;
+			}
+			else tok = PLUS;
+		}
+		else if(*prog == '-'){
+			*t++ = *prog++;
+			if(*prog == '-'){
+				*t++ = *prog++;
+				tok = DECREMENT;
+			}
+			else if(*prog == '>'){
+				*t++ = *prog++;
+				tok = ARROW;
+			}
+			else tok = MINUS;
+		}
+		else if(*prog == '*'){
+			*t++ = *prog++;
+			tok = ASTERISK;
+		}
+		else if(*prog == '/'){
+			*t++ = *prog++;
+			tok = DIVISION;
+		}
+		else if(*prog == '%'){
+			*t++ = *prog++;
+			tok = MOD;
+		}
+		else if(*prog == '('){
+			*t++ = *prog++;
+			tok = OPENING_PAREN;
+		}
+		else if(*prog == ')'){
+			*t++ = *prog++;
+			tok = CLOSING_PAREN;
+		}
+		else if(*prog == ';'){
+			*t++ = *prog++;
+			tok = SEMICOLON;
+		}
+		else if(*prog == ','){
+			*t++ = *prog++;
+			tok = COMMA;
+		}
+		else if(*prog == '.'){
+			*t++ = *prog++;
+			tok = DOT;
+		}
+	}
+
+	*t = '\0';
+}

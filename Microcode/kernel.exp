@@ -1,0 +1,4 @@
+disk_buffer      .EQU  $1835
+origin           .EQU  $1835
+sys_uart         .EQU  $0002
+sys_ide          .EQU  $0003

@@ -1,0 +1,38 @@
+	typ1	typ0	DMA	INT		muxC	muxB	muxA
+				
+offst	0	0	x	x		0	0	0	(adder)
+brch	0	1	x	x		0	0	0	(adder)
+
+pre	1	0	1	x		1	0	0	(dma u-code)
+pre	1	0	0	1		0	1	1	(interrupt u-code)
+pre	1	0	0	0		0	1	0	(fetch u-code)
+
+post	1	1	x	x		0	0	1	(IR)
+
+
+
+muxA = typ1~typ0~DmaInt + typ1typ0      	==  typ1( ~typ0~DmaInt + typ0 )
+muxB = typ1~typ0~DmaInt + typ1~typ0~Dma~Int 	==  typ1~typ0~Dma
+muxC = typ1~typ0Dma
+
+
+
+types
+00	+offset		( +1 for sequential, and +offset for cond/uncond jumps )
+01	branch		( used for microcode branches, which are used to perform programmer's branches as well )
+10	pre		( pre-fetch, means next is the pre-fetch microcode )
+11	post		( means next u-address is given by  0xIR000000, u-code length = 64 places(6bits) )
+
+8 to 1 mux values
+000	adder		( +1 or +offset )
+001	IR		
+010	fetch		( fetch handle )
+011	INT		( INTERRUPT handle )
+100	DMA		( DMA handle )
+
+
+
+
+
+
+

@@ -1,0 +1,13 @@
+disk_buffer      .EQU  $1989
+sys_rtc          .EQU  $0001
+sys_ide_kernel   .EQU  $0002
+sys_io           .EQU  $0003
+sys_fileio       .EQU  $0004
+sys_fork         .EQU  $0005
+sys_fwb          .EQU  $0006
+sys_fwk          .EQU  $0007
+sys_ide          .EQU  $0008
+sys_en           .EQU  $0009
+sys_list         .EQU  $000a
+sys_primew       .EQU  $000b
+sys_primer       .EQU  $000c

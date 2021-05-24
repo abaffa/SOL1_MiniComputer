@@ -1,0 +1,257 @@
+{rep} movsb
+{rep} stosb
+{repz} cmpsb
+adc a, b   - add d, c
+adc a, i16 - add c, d
+adc b, i16 - sub a, c
+adc c, i16 - sub a, d
+add a, b   - clc
+add a, i16 - stc
+add al, bl - add al, dh
+add al, i8 - add al, dl
+add b, a   - add a, d
+add b, i16 - add a, c
+add bl, i8 - add bl, al
+add c, i16 - add b, c
+add ch, i8 - add cl, al
+add cl, i8 - add bl, ah
+add d, a   - add c, a
+add d, b   - add c, b
+add d, i16 - add b, d
+add di, i16 - sub word [d+i16], i16
+add si, i16 - sub word [d], i16
+add sp, i16 - inc sp
+and a, b   - nand a, b
+and a, u16 - nand a, u16
+and al, bl - nand al, bl
+and al, u8 - and bl, u8
+ashr a, {cl, u8}
+ashr al, {cl, u8}
+call {u16, [a + i16]}
+call a - supcopy
+cmp a, b
+cmp a, c
+cmp a, d
+cmp a, i16
+cmp ah, i8
+cmp al, bl
+cmp al, cl
+cmp al, i8
+cmp b, i16 - cmp b, c
+cmp bl, i8
+cmp byte[{bp,sp}+i16], u8
+cmp byte[d + i16], u8
+cmp byte[d], u8
+cmp byte[u16], u8
+cmp c, i16
+cmp ch, i8 - add byte [d], i8
+cmp cl, i8 - add byte [u16], i8
+cmp d, i16 - add byte [d+i16], i8
+cmp word[{bp,sp}+i16], u16
+cmp word[d + i16], u16
+cmp word[d], u16
+cmp word[u16], u16
+dec {a, b}
+dec ah
+dec al
+dec c - mov g, di
+dec ch
+dec cl
+dec d
+div a, b
+enter u16 - lea d, [bp + B + A*^u8]
+esc u8
+halt
+inc {a, b}
+inc ah
+inc al - mov g, c
+inc c  - mov g, a
+inc ch - mov g, si
+inc cl - mov g, d
+inc d  - mov g, b
+jc/jlu u16 - add word [u16], i16
+jg u16 - sub byte [d], i8
+jge u16 - sub byte [d+i16], i8
+jgu u16 - sub byte [sp+i16], i8
+jl u16 - add word [sp+i16], i16
+jle u16 - sub byte [u16], i8
+jleu u16 - sub byte [bp+i16], i8
+jmp {a, [u16 + bl]}
+jmp u16
+jnc/jgeu u16 - add word [d], i16
+jneg u16 - add word [d+i16], i16
+jnz u16    - add byte [sp+i16], i8
+jpos u16 - add word [bp+i16], i16
+jz u16     - add byte [bp+i16], i8
+lea d, [{bp, sp} + u16]
+lea d, [di + u16]
+lea d, [si + u16]
+leave - lea d, [u16 + B + A(u8)]
+load
+lodflgs - lodmsks
+lodsb - repnz cmpsb
+lodstat - sti
+loopc u16 - loopb u16
+mov [{bp, sp} + d], a
+mov [{bp, sp} + d], al
+mov [{bp, sp} + i16], a
+mov [{bp, sp} + i16], al
+mov [d + i16], {a, b}
+mov [d + i16], {al, bl}
+mov [d], {a, b}
+mov [d], {al, bl}
+mov [u16], {a, b}
+mov [u16], {al, bl}
+mov a, [{bp, sp} + d]
+mov a, [{bp, sp} + i16]
+mov a, [a + i16]
+mov a, [d + i16]
+mov a, [d]
+mov a, [u16]
+mov a, {b, pc}
+mov a, {c, g}
+mov a, bp - cmc
+mov a, d
+mov a, di - mov di, d
+mov a, i16 - cla
+mov a, si - mov si, d
+mov a, sp
+mov ah, {al, gl}
+mov ah, {bl, gh}
+mov ah, bh
+mov ah, i8
+mov al, [{bp, sp} + d]
+mov al, [{bp, sp} + i16]
+mov al, [d + i16]
+mov al, [d]
+mov al, [u16]
+mov al, {ah, gl}
+mov al, {bl, gh}
+mov al, bh
+mov al, ch
+mov al, cl - nand al, u8
+mov al, i8
+mov b, [{bp, sp} + i16]
+mov b, [d + i16]
+mov b, [d]
+mov b, [u16]
+mov b, {a, g}
+mov b, c
+mov b, d
+mov b, i16
+mov bh, {al, gl}
+mov bh, {bl, gh}
+mov bh, ah - shl al
+mov bh, u8
+mov bl, [{bp, sp} + d]
+mov bl, [{bp, sp} + i16]
+mov bl, [d + i16]
+mov bl, [d]
+mov bl, [u16]
+mov bl, {al, gl}
+mov bl, {bh, gh}
+mov bl, ah - shl a
+mov bl, i8
+mov bp, {a, u16}
+mov bp, sp - shr a
+mov byte[u16], u8
+mov c, {a, b}
+mov c, {u16, g}
+mov cl, {al, gh}
+mov cl, {u8, gl}
+mov d, {a, c}
+mov d, {u16, g}
+mov d, b
+mov di, {a, u16}
+mov si, {a, u16}
+mov sp, {a, u16}
+mov sp, bp - shr al
+mov word[u16], u16
+mul a, {b, c}
+mul al, bl
+nop - strcmp
+not a  - neg a
+not al - neg al
+not b  - neg b
+not bl - neg bl
+or a, b    - nor a, b
+or a, u16  - nor a, u16
+or al, bl  - nor al, bl
+or al, u8  - or bl, u8
+pagemap
+pop {bp, g}
+pop a   - rrc a, cl
+pop ah  - rlc bl, cl
+pop al  - rlc b, cl
+pop b   - rrc al, cl
+pop bh  - ror bl, cl
+pop bl  - ror b, cl
+pop c   - rol b, cl
+pop ch  - rrc bl, cl
+pop cl  - rrc b, cl
+pop d   - rol bl, cl
+pop di
+
+pop si
+popa
+popf
+push {a, word u16}
+push {al, byte u8}
+push {b, g}
+push ah
+push bh - rol a, cl
+push bl
+push bp - sub word [u16], i16
+push c
+push ch - rlc a, cl
+push cl - rol al, cl
+push d
+push di - ror al, cl
+push si - ror a, cl
+pusha
+pushf   - rlc al, cl
+ret - supstart
+rst/fetch/trap/dma
+sbb a, b   - add al, bh
+sbb a, i16 - add al, ah
+sbb b, i16 - add al, cl
+sbb c, i16 - add al, ch
+scansb
+setptb
+shl a, {cl, u8}
+shl al, {cl, u8}
+shl b, {cl, u8}
+shl bl, {cl, u8}
+shr a, {cl, u8}
+shr al, {cl, u8}
+shr b, {cl, u8}
+shr bl, {cl, u8}
+snex a - swp A
+snex b - swp B
+stoflgs - stomsks
+store
+stostat - cli
+sub a, b   - sub b, c
+sub a, i16 - sub b, a
+sub al, bl
+sub al, i8 - add cl, ah
+sub b, i16 - sub b, d
+sub c, i16 - sub c, a
+sub ch, i8
+sub cl, i8
+sub d, a   - sub c, d
+sub d, b   - sub d, c
+sub d, i16 - sub c, b
+sub di, i16 - sub word [sp+i16], i16
+sub si, i16 - sub word [bp+i16], i16
+sub sp, i16 - dec sp
+syscall u8
+sysret
+test a, b
+test a, u16 - ashr bl, u8
+test al, bl - test cl, u8
+test al, u8 - test bl, u8
+xor a, b    - ashr b, cl
+xor a, u16 - nor al, u8
+xor al, bl  - ashr b, u8
+xor al, u8  - ashr bl, cl

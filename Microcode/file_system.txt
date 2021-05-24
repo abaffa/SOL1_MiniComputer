@@ -1,0 +1,27 @@
+file system structure on disk
+
+16 files per directory (for now)
+
+#---------------------#
+| directory name (27) |
+|                     |  1 sector / 512 bytes
+| parent ID (2)       | (could fit more files here)
+#---------------------#
+| filename (27)       |
+| attributes (1)      |  32 bytes
+| ID/LBA (2)          |
+| size (2)            |
+#---------------------#
+          *           
+          *            
+          *
+#---------------------#
+| filename (27)       |
+| attributes (1)      |  32 bytes
+| ID/LBA (2)          |
+| size (2)            |
+#---------------------#
+
+
+all file data blocks are stored higher up in the disk LBA space.
+all files are 16KB long and come in series in the disk.
